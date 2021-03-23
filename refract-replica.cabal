@@ -1,0 +1,89 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 4841320e6095ceed10241f882a8df9a770abc3173d3807dba87bb557e94112a4
+
+name:           refract-replica
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/refract-replica#readme>
+homepage:       https://github.com/githubuser/refract-replica#readme
+bug-reports:    https://github.com/githubuser/refract-replica/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2021 Author name here
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/refract-replica
+
+library
+  exposed-modules:
+      Refract
+      Refract.DOM
+      Refract.DOM.Events
+      Refract.DOM.Props
+  other-modules:
+      Paths_refract_replica
+  hs-source-dirs:
+      src
+  build-depends:
+      aeson
+    , base >=4.7 && <5
+    , containers
+    , replica
+    , text
+    , wai
+    , wai-websockets
+    , warp
+    , websockets
+  default-language: Haskell2010
+
+executable refract-replica-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_refract_replica
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , base >=4.7 && <5
+    , containers
+    , refract-replica
+    , replica
+    , text
+    , wai
+    , wai-websockets
+    , warp
+    , websockets
+  default-language: Haskell2010
+
+test-suite refract-replica-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_refract_replica
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , base >=4.7 && <5
+    , containers
+    , refract-replica
+    , replica
+    , text
+    , wai
+    , wai-websockets
+    , warp
+    , websockets
+  default-language: Haskell2010
