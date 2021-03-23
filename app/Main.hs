@@ -4,6 +4,8 @@
 
 module Main where
 
+import Control.Monad.Trans.State (modify)
+
 import Data.Text (Text, pack)
 import Data.Tuple.Optics
 import Data.Maybe (fromMaybe)
@@ -37,9 +39,9 @@ unsafeIx x = toLens (error "unsafeIx") $ ix x
 
 counter' :: Lens' st Int -> Component st
 counter' l = stateL l $ \st -> div []
-  [ div [ onClick $ \_ -> over l $ \st -> st + 1 ] [ text "+" ]
+  [ div [ onClick $ \_ -> modify $ over l $ \st -> st + 1 ] [ text "+" ]
   , text (pack $ show st)
-  , div [ onClick $ \_ -> over l $ \st -> st - 1 ] [ text "-" ]
+  , div [ onClick $ \_ -> modify $ over l $ \st -> st - 1 ] [ text "-" ]
   ]
 
 counter :: IO ()
@@ -66,7 +68,7 @@ dragDrop = undefined
 showTree :: Int -> Lens' st Node -> Component st
 showTree level l = stateL l $ \Node {..} -> div [ style padding ] $ mconcat
   [ [ span
-        [ onClick $ \_ -> over (l % nodeOpen) not ]
+        [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
         [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ] ]
 
   , if _nodeOpen

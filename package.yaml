@@ -25,6 +25,7 @@ dependencies:
 - containers
 - replica
 - text
+- transformers
 - wai
 - wai-websockets
 - websockets

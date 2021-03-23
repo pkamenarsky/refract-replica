@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0697fd950e066d9e22c42e7c45c04ffaac7b43731ff03190388c9d806e82d65f
+-- hash: 0e815617fe95193418890fa896a441b39bbc6bdebb6229795f93fc0ed224df88
 
 name:           refract-replica
 version:        0.1.0.0
@@ -41,6 +41,7 @@ library
     , containers
     , replica
     , text
+    , transformers
     , wai
     , wai-websockets
     , warp
@@ -62,6 +63,7 @@ executable refract-replica-exe
     , refract-replica
     , replica
     , text
+    , transformers
     , wai
     , wai-websockets
     , warp
@@ -83,6 +85,7 @@ test-suite refract-replica-test
     , refract-replica
     , replica
     , text
+    , transformers
     , wai
     , wai-websockets
     , warp

@@ -2,14 +2,19 @@
 
 module Refract.DOM.Events where
 
-import           Refract.DOM.Props (Props(Props), Prop(PropEvent))
+import           Control.Monad.Fix         (mfix)
+import qualified Control.Monad.Trans.State as ST
 
-import           Data.Aeson               ((.:), (.:?))
-import qualified Data.Aeson               as A
+import           Refract.DOM.Props         (Props(Props), Prop(PropEvent))
 
-import qualified Data.Text                as T
+import           Data.Aeson                ((.:), (.:?))
+import qualified Data.Aeson                as A
 
-import           Replica.VDOM.Types       (DOMEvent(getDOMEvent))
+import qualified Data.Text                 as T
+
+import           Replica.VDOM.Types        (DOMEvent(getDOMEvent))
+
+import qualified Network.Wai.Handler.Replica as R
 
 -- TODO: return Maybe here
 extractResult :: A.Result a -> a
@@ -120,85 +125,152 @@ instance A.FromJSON KeyboardEvent where
 --
 -- <https://developer.mozilla.org/en-US/docs/Web/Events/blur>
 --
-onBlur :: (BaseEvent -> st -> st) -> Props st
+onBlur :: (BaseEvent -> ST.StateT st IO ()) -> Props st
 onBlur f = Props "onBlur" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/click
-onClick :: (MouseEvent -> st -> st) -> Props st
+onClick :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onClick f = Props "onClick" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/focus
-onFocus :: (BaseEvent -> st -> st) -> Props st
+onFocus :: (BaseEvent -> ST.StateT st IO ()) -> Props st
 onFocus f = Props "onFocus" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dblclick
-onDoubleClick :: (MouseEvent -> st -> st) -> Props st
+onDoubleClick :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onDoubleClick f = Props "onDblClick" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/input
-onInput :: (BaseEvent -> st -> st) -> Props st
+onInput :: (BaseEvent -> ST.StateT st IO ()) -> Props st
 onInput f = Props "onInput" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/change
-onChange :: (BaseEvent -> st -> st) -> Props st
+onChange :: (BaseEvent -> ST.StateT st IO ()) -> Props st
 onChange f = Props "onChange" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/keydown
-onKeyDown :: (KeyboardEvent -> st -> st) -> Props st
+onKeyDown :: (KeyboardEvent -> ST.StateT st IO ()) -> Props st
 onKeyDown f = Props "onKeyDown" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/keypress
-onKeyPress :: (KeyboardEvent -> st -> st) -> Props st
+onKeyPress :: (KeyboardEvent -> ST.StateT st IO ()) -> Props st
 onKeyPress f = Props "onKeyPress" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/keyup
-onKeyUp :: (KeyboardEvent -> st -> st) -> Props st
+onKeyUp :: (KeyboardEvent -> ST.StateT st IO ()) -> Props st
 onKeyUp f = Props "onKeyUp" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseup
-onMouseUp :: (MouseEvent -> st -> st) -> Props st
+onMouseUp :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onMouseUp f = Props "onMouseUp" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mousedown
-onMouseDown :: (MouseEvent -> st -> st) -> Props st
+onMouseDown :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onMouseDown f = Props "onMouseDown" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseenter
-onMouseEnter :: (MouseEvent -> st -> st) -> Props st
+onMouseEnter :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onMouseEnter f = Props "onMouseEnter" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseleave
-onMouseLeave :: (MouseEvent -> st -> st) -> Props st
+onMouseLeave :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onMouseLeave f = Props "onMouseLeave" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseover
-onMouseOver :: (MouseEvent -> st -> st) -> Props st
+onMouseOver :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onMouseOver f = Props "onMouseOver" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseout
-onMouseOut :: (MouseEvent -> st -> st) -> Props st
+onMouseOut :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onMouseOut f = Props "onMouseOut" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragstart
-onDragStart :: (MouseEvent -> st -> st) -> Props st
+onDragStart :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onDragStart f = Props "onDragStart" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragover
-onDragOver :: (MouseEvent -> st -> st) -> Props st
+onDragOver :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onDragOver f = Props "onDragOver" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragend
-onDragEnd :: (MouseEvent -> st -> st) -> Props st
+onDragEnd :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onDragEnd f = Props "onDragEnd" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragenter
-onDragEnter :: (MouseEvent -> st -> st) -> Props st
+onDragEnter :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onDragEnter f = Props "onDragEnter" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragleave
-onDragLeave :: (MouseEvent -> st -> st) -> Props st
+onDragLeave :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onDragLeave f = Props "onDragLeave" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/drag
-onDrag :: (MouseEvent -> st -> st) -> Props st
+onDrag :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onDrag f = Props "onDrag" (PropEvent (f . extractResult . A.fromJSON . getDOMEvent))
+
+--------------------------------------------------------------------------------
+
+mouseDownAndDragAndDrop :: R.Context -> (Maybe (Int, Int) -> IO ()) -> IO ()
+mouseDownAndDragAndDrop ctx cb = do
+  jsCb <- mfix $ \jsCb -> do
+    jsCb <- R.registerCallback ctx (dragged jsCb)
+    pure jsCb
+
+  R.call ctx jsCb js
+  where
+    js = "var down = function(e) { \n\
+           \ e.preventDefault(); \n\
+           \ var drag = function(f) { \n\
+           \   callCallback(arg, [f.clientX, f.clientY]); \n\
+           \ }; \n\
+           \ window.addEventListener('mousemove', drag); \n\
+           \ var up = function() { \n\
+           \   window.removeEventListener('mousemove', drag); \n\
+           \   window.removeEventListener('mousedown', down); \n\
+           \   window.removeEventListener('mouseup', up); \n\
+           \   callCallback(arg, null); \n\
+           \ }; \n\
+           \ window.addEventListener('mouseup', up); \n\
+         \}; \n\
+         \window.addEventListener('mousedown', down); \n\
+         \"
+
+    dragged :: R.Callback -> Maybe (Int, Int) -> IO ()
+    dragged jsCb xy@Nothing = do
+      R.unregisterCallback ctx jsCb
+      cb xy
+    dragged jsCb xy = cb xy
+
+data DragState = DragStarted Int Int | DragDragged Int Int | DragNone
+
+dragAndDrop :: R.Context -> MouseEvent -> (DragState -> IO ()) -> IO ()
+dragAndDrop ctx event cb = do
+  jsCb <- mfix $ \jsCb -> do
+    jsCb <- R.registerCallback ctx (dragged jsCb)
+    pure jsCb
+
+  cb (DragStarted 0 0)
+
+  R.call ctx jsCb js
+  where
+    js = "var drag = function(f) { \n\
+        \   callCallback(arg, [f.clientX, f.clientY]); \n\
+        \ }; \n\
+        \ var up = function() { \n\
+        \   window.removeEventListener('mousemove', drag); \n\
+        \   window.removeEventListener('mousedown', down); \n\
+        \   window.removeEventListener('mouseup', up); \n\
+        \   callCallback(arg, null); \n\
+        \ }; \n\
+        \ window.addEventListener('mousemove', drag); \n\
+        \ window.addEventListener('mouseup', up); \n\
+      \}; \n\
+      \"
+
+    dragged :: R.Callback -> Maybe (Int, Int) -> IO ()
+    dragged jsCb xy@Nothing = do
+      R.unregisterCallback ctx jsCb
+      cb DragNone
+    dragged jsCb xy@(Just (x, y)) = cb $ DragDragged
+      (x - mouseClientX event)
+      (y - mouseClientY event)
