@@ -1,6 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Refract where
 
 import qualified Control.Concurrent.MVar as MVar
+import Control.Monad.Fix (mfix)
 
 import qualified Data.Text as T
 
@@ -21,20 +24,83 @@ state f = Component $ \setState st -> runComponent (f st) setState st
 
 --------------------------------------------------------------------------------
 
-run :: Int -> V.HTML -> ConnectionOptions -> Middleware -> st -> (R.Context -> Component st) -> IO ()
+registerDragAndDrop :: R.Context -> (Maybe (Int, Int) -> IO ()) -> IO ()
+registerDragAndDrop ctx cb = do
+  jsCb <- mfix $ \jsCb -> do
+    jsCb <- R.registerCallback ctx (dragged jsCb)
+    pure jsCb
+
+  R.call ctx jsCb js
+  where
+    js = "var down = function(e) { \n\
+           \ e.preventDefault(); \n\
+           \ var drag = function(f) { \n\
+           \   callCallback(arg, [f.clientX, f.clientY]); \n\
+           \ }; \n\
+           \ window.addEventListener('mousemove', drag); \n\
+           \ var up = function() { \n\
+           \   window.removeEventListener('mousemove', drag); \n\
+           \   window.removeEventListener('mousedown', down); \n\
+           \   window.removeEventListener('mouseup', up); \n\
+           \   callCallback(arg, null); \n\
+           \ }; \n\
+           \ window.addEventListener('mouseup', up); \n\
+         \}; \n\
+         \window.addEventListener('mousedown', down); \n\
+         \"
+
+    dragged :: R.Callback -> Maybe (Int, Int) -> IO ()
+    dragged jsCb xy@Nothing = do
+      R.unregisterCallback ctx jsCb
+      cb xy
+    dragged jsCb xy = cb xy
+
+dragAndDrop :: R.Context -> (Maybe (Int, Int) -> IO ()) -> IO ()
+dragAndDrop ctx cb = do
+  jsCb <- mfix $ \jsCb -> do
+    jsCb <- R.registerCallback ctx (dragged jsCb)
+    pure jsCb
+
+  R.call ctx jsCb js
+  where
+    js = "var drag = function(f) { \n\
+        \   callCallback(arg, [f.clientX, f.clientY]); \n\
+        \ }; \n\
+        \ var up = function() { \n\
+        \   window.removeEventListener('mousemove', drag); \n\
+        \   window.removeEventListener('mousedown', down); \n\
+        \   window.removeEventListener('mouseup', up); \n\
+        \   callCallback(arg, null); \n\
+        \ }; \n\
+        \ window.addEventListener('mousemove', drag); \n\
+        \ window.addEventListener('mouseup', up); \n\
+      \}; \n\
+      \"
+
+    dragged :: R.Callback -> Maybe (Int, Int) -> IO ()
+    dragged jsCb xy@Nothing = do
+      R.unregisterCallback ctx jsCb
+      cb xy
+    dragged jsCb xy = cb xy
+
+--------------------------------------------------------------------------------
+
+
+run :: Int -> V.HTML -> ConnectionOptions -> Middleware -> st -> (R.Context -> IO (Component st)) -> IO ()
 run port index connectionOptions middleware st component
   = W.run port
   $ R.app index connectionOptions middleware st (step component)
 
-runDefault :: Int -> T.Text -> st -> (R.Context -> Component st) -> IO ()
+runDefault :: Int -> T.Text -> st -> (R.Context -> IO (Component st)) -> IO ()
 runDefault port title st component
   = W.run port
   $ R.app (V.defaultIndex title []) defaultConnectionOptions id st (step component)
 
-step :: (Replica.Context -> Component st) -> Replica.Context -> st -> IO (V.HTML, Replica.Event -> Maybe (IO ()), IO (Maybe st))
-step cmp ctx st = do
+step :: (Replica.Context -> IO (Component st)) -> Replica.Context -> st -> IO (V.HTML, Replica.Event -> Maybe (IO ()), IO (Maybe st))
+step f ctx st = do
   stRef <- MVar.newEmptyMVar
-  let html = Refract.runComponent (cmp ctx) (MVar.putMVar stRef) st
+  cmp <- f ctx
+  let html = Refract.runComponent cmp (MVar.putMVar stRef) st
   pure
     ( html
     , \event -> V.fireEvent html (Replica.evtPath event) (Replica.evtType event) (V.DOMEvent $ Replica.evtEvent event)

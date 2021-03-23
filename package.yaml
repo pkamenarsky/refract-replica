@@ -43,6 +43,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - refract-replica
+    - optics
 
 tests:
   refract-replica-test:

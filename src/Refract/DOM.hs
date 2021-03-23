@@ -28,7 +28,7 @@ elWithNamespace ns name props children = Component $ \setState st ->
     toProps setState st (Props k (PropEvent f)) = M.singleton k $ VDOM.AEvent $ \de -> setState (f de st)
     toProps setState st (Props k (PropText v)) = M.singleton k $ VDOM.AText v
     toProps setState st (Props k (PropBool v)) = M.singleton k $ VDOM.ABool v
-    toProps setState st (Props k (PropMap m)) = M.unions $ map (toProps setState st) m
+    toProps setState st (Props k (PropMap m)) = M.singleton k $ VDOM.AMap $ M.unions $ map (toProps setState st) m
  
 text :: T.Text -> Component st
 text txt = Component $ \_ _ -> [VDOM.VText txt]

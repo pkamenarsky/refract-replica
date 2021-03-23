@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4841320e6095ceed10241f882a8df9a770abc3173d3807dba87bb557e94112a4
+-- hash: 0697fd950e066d9e22c42e7c45c04ffaac7b43731ff03190388c9d806e82d65f
 
 name:           refract-replica
 version:        0.1.0.0
@@ -58,6 +58,7 @@ executable refract-replica-exe
       aeson
     , base >=4.7 && <5
     , containers
+    , optics
     , refract-replica
     , replica
     , text
