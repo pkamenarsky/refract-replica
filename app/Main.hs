@@ -6,8 +6,9 @@
 
 module Main where
 
-import Control.Monad.Trans.State (modify)
+import Control.Monad.Trans.State (get, modify)
 import qualified Control.Monad.Trans.State as ST
+import Control.Monad.IO.Class (liftIO)
 
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 
@@ -48,6 +49,9 @@ toLens d t = lens (fromMaybe d . preview t) (\a b -> set t b a)
 
 unsafeIx :: Int -> Lens' [a] a
 unsafeIx x = toLens (error "unsafeIx") $ ix x
+
+px :: Int -> Text
+px x = pack (show x) <> "px"
 
 -- Tree ------------------------------------------------------------------------
 
@@ -126,7 +130,6 @@ window cmp startDrag l = stateL l $ \rs -> div
   , div [ content ] [ cmp ]
   ]
   where
-    px x = pack (show x) <> "px"
     css WindowState {..} = style
       [ ("position", "absolute")
       , ("left", px (_positionX + _dragX))
@@ -159,18 +162,92 @@ window cmp startDrag l = stateL l $ \rs -> div
 -- Song ------------------------------------------------------------------------
 
 data SongState = SongState
-  {
+  { _ssDragged :: Bool
+  , _ssDragX :: Int
+  , _ssDragY :: Int
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
+makeLenses ''SongState
+
+defaultSongState :: SongState
+defaultSongState = SongState
+  { _ssDragged = False
+  , _ssDragX = 0
+  , _ssDragY = 0
   }
 
-song :: Component st
-song = undefined
+song :: DragHandler st -> Lens' st SongState -> Lens' st [DroppedState] -> Component st
+song startDrag l lds = stateL l $ \st -> div []
+  [ div [ css ]
+      [ div
+          [ style dragHandle
+          , onMouseDown $ \e -> startDrag e
+              (\_ _ -> modify $ over l $ \st' -> st' { _ssDragged = True } )
+              (\x y -> modify $ over l $ \st' -> st' { _ssDragX = x, _ssDragY = y } )
+              $ do
+                  st <- view l <$> get
+                  modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
+                  modify $ over l $ \st' -> st' { _ssDragged = False, _ssDragX = 0, _ssDragY = 0 }
+          ] []
+      ]
+  , if _ssDragged st
+      then div [ dragged st ] []
+      else div [] []
+  ]
+  where
+    css = style
+      [ ("position", "absolute")
+      , ("left", px 300)
+      , ("top", px 300)
+      , ("width", px 200)
+      , ("height", px 50)
+      , ("border", "1px solid #333")
+      ]
 
+    dragHandle = 
+      [ ("position", "absolute")
+      , ("top", px 8)
+      , ("right", px 8)
+      , ("width", px 8)
+      , ("height", px 8)
+      , ("backgroundColor", "#333")
+      ]
+
+    dragged SongState {..} = style
+      [ ("position", "absolute")
+      , ("left", px (300 + _ssDragX))
+      , ("top", px (300 + _ssDragY))
+      , ("width", px 200)
+      , ("height", px 50)
+      , ("backgroundColor", "#333")
+      ]
+
+data DroppedState = DroppedState
+  { _dsX :: Int
+  , _dsY :: Int
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
+makeLenses ''DroppedState
+
+dropped :: Lens' st DroppedState -> Component st
+dropped l = stateL l $ \st ->div [ css st ] []
+  where
+    css DroppedState {..} = style
+      [ ("position", "absolute")
+      , ("left", px _dsX)
+      , ("top", px _dsY)
+      , ("width", px 50)
+      , ("height", px 50)
+      , ("backgroundColor", "#333")
+      ]
 
 -- OS --------------------------------------------------------------------------
 
 data State = State
   { _root :: NodeState
   , _windowStates :: [WindowState]
+  , _songState :: SongState
+  , _droppedState :: [DroppedState]
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 makeLenses ''State
@@ -178,6 +255,8 @@ makeLenses ''State
 defaultState = State
   { _root = defaultNodeState
   , _windowStates = [defaultWindowState, defaultWindowState]
+  , _songState = defaultSongState
+  , _droppedState = []
   }
 
 main :: IO ()
@@ -188,6 +267,10 @@ main = do
         [ -- [ text (pack $ show st) ]
           [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
           | (i, _) <- zip [0..] (_windowStates st)
+          ]
+        , [ song drag songState droppedState ]
+        , [ dropped (droppedState % unsafeIx  i)
+          | (i, _) <- zip [0..] (_droppedState st)
           ]
         ]
   where
