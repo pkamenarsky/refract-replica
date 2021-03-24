@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -6,15 +8,16 @@ module Main where
 
 import Control.Monad.Trans.State (modify)
 import qualified Control.Monad.Trans.State as ST
-import Control.Monad.IO.Class (liftIO)
 
-import Control.Concurrent.STM (atomically, retry)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 
+import qualified Data.Aeson as A
 import Data.Text (Text, pack)
 import Data.Tuple.Optics
 import Data.Maybe (fromMaybe)
 import Data.Maybe.Optics
+
+import qualified Foreign.Store as Store
 
 import Optics.Getter
 import Optics.At
@@ -31,6 +34,8 @@ import Refract.DOM.Props
 import Refract.DOM
 import Refract
 
+import GHC.Generics (Generic)
+
 import qualified Network.Wai.Handler.Replica as R
 
 import Prelude hiding (div, span)
@@ -44,31 +49,18 @@ toLens d t = lens (fromMaybe d . preview t) (\a b -> set t b a)
 unsafeIx :: Int -> Lens' [a] a
 unsafeIx x = toLens (error "unsafeIx") $ ix x
 
-counter' :: Lens' st Int -> Component st
-counter' l = stateL l $ \st -> div []
-  [ div [ onClick $ \_ -> modify $ over l $ \st -> st + 1 ] [ text "+" ]
-  , text (pack $ show st)
-  , div [ onClick $ \_ -> modify $ over l $ \st -> st - 1 ] [ text "-" ]
-  ]
-
-counter :: IO ()
-counter = runDefault 3777 "Counter" [i | i <- [0..10]] [] $ \_ -> pure $ div []
-  [ counter' (toLens 0 $ ix i)
-  | i <- [0..10]
-  ]
-
---------------------------------------------------------------------------------
+-- Tree ------------------------------------------------------------------------
 
 data Node = Node
   { _nodeOpen :: Bool
   , _nodeName :: Text
   , _nodeChildren :: [Node]
-  } deriving Show
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 makeLenses ''Node
 
 showTree :: Int -> Lens' st Node -> Component st
-showTree level l = stateL l $ \Node {..} -> div [ style padding ] $ mconcat
+showTree level l = stateL l $ \Node {..} -> div [ style css ] $ mconcat
   [ [ span
         [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
         [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
@@ -82,16 +74,25 @@ showTree level l = stateL l $ \Node {..} -> div [ style padding ] $ mconcat
       else []
   ]
   where
-    padding = [ ("padding-left", pack (show $ level * 12) <> "px") ]
+    css =
+      [ ("paddingLeft", pack (show $ level * 12) <> "px")
+      , ("fontFamily", "Helvetica")
+      , ("fontSize", "14px")
+      , ("lineHeight", "18px")
+      ]
 
 tree = Node False "/root" [ Node False "/home" [ Node False "/phil" [], Node False "/satan" [] ], Node False "/etc" [] ]
+
+-- Window  ---------------------------------------------------------------------
 
 data WindowState = WindowState
   { _positionX :: Int
   , _positionY :: Int
+  , _width :: Int
+  , _height :: Int
   , _dragX :: Int
   , _dragY :: Int
-  } deriving Show
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 makeLenses ''WindowState
 
@@ -99,21 +100,11 @@ defaultWindowState :: WindowState
 defaultWindowState = WindowState
   { _positionX = 100
   , _positionY = 100
+  , _width = 200
+  , _height = 200
   , _dragX = 0
   , _dragY = 0
   }
-
-data State = State
-  { _root :: Node
-  , _windowStates :: [WindowState]
-  } deriving Show
-
-defaultState = State
-  { _root = tree
-  , _windowStates = [defaultWindowState, defaultWindowState]
-  }
-
-makeLenses ''State
 
 window :: Component st -> DragHandler st -> Lens' st WindowState -> Component st
 window cmp startDrag l = stateL l $ \rs -> div
@@ -133,8 +124,8 @@ window cmp startDrag l = stateL l $ \rs -> div
       [ ("position", "absolute")
       , ("left", px (_positionX + _dragX))
       , ("top", px (_positionY + _dragY))
-      , ("width", "200px")
-      , ("height", "200px")
+      , ("width", px _width)
+      , ("height", px _height)
       , ("border", "1px solid #333")
       , ("borderRadius", "5px 5px 0px 0px")
       ]
@@ -155,37 +146,41 @@ window cmp startDrag l = stateL l $ \rs -> div
       , ("bottom", px 0)
       , ("backgroundColor", "#fff")
       , ("userSelect", "none")
+      , ("overflow", "auto")
       ]
 
-type DragHandler st = 
-     MouseEvent
-  -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragStarted
-  -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
-  -> ST.StateT st IO () -- ^ dragFinished
-  -> ST.StateT st IO ()
+-- OS --------------------------------------------------------------------------
 
-startDrag
-  :: R.Context
-  -> TChan (st -> IO st) -- ^ setState
-  -> DragHandler st
-startDrag ctx modStCh mouseEvent started dragged finished
-  = liftIO $ dragAndDrop ctx writeState mouseEvent
-  where
-    action (DragStarted x y) = started x y
-    action (DragDragged x y) = dragged x y
-    action DragNone = finished
+data State = State
+  { _root :: Node
+  , _windowStates :: [WindowState]
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
-    writeState ds = atomically $ writeTChan modStCh $ ST.execStateT (action ds)
+makeLenses ''State
+
+defaultState = State
+  { _root = tree
+  , _windowStates = [defaultWindowState, defaultWindowState]
+  }
 
 main :: IO ()
 main = do
-  ddChan <- newTChanIO
-  runDefault 3777 "Tree" defaultState [ddChan] $ \ctx -> do
-
-  pure $ let drag = startDrag ctx ddChan in
-    state $ \st -> div [] $ mconcat
-      [ [ text (pack $ show st) ]
-      , [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
-        | (i, _) <- zip [0..] (_windowStates st)
+  runDefault 3777 "Tree" storeState readStore (pure <$> newTChanIO) $ \ctx [ddChan] -> do
+    pure $ let drag = startDrag ctx ddChan in state $ \st ->
+      div [] $ mconcat
+        [ -- [ text (pack $ show st) ]
+          [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
+          | (i, _) <- zip [0..] (_windowStates st)
+          ]
         ]
-      ]
+  where
+    storeState st = Store.writeStore (Store.Store 0) $ A.encode st
+
+    readStore = fromMaybe defaultState <$> do
+      store <- Store.lookupStore 0
+
+      case store of
+        Nothing -> do
+          storeState defaultState
+          pure $ Just defaultState
+        Just store -> A.decode <$> Store.readStore (Store.Store 0)

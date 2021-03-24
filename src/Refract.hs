@@ -29,19 +29,18 @@ state' f = Component $ \setState st -> runComponent (f st setState) setState st
 
 --------------------------------------------------------------------------------
 
-run :: Int -> V.HTML -> ConnectionOptions -> Middleware -> st -> [TChan (st -> IO st)] -> (R.Context -> IO (Component st)) -> IO ()
-run port index connectionOptions middleware st exModStChs component = do
+run :: Int -> V.HTML -> ConnectionOptions -> Middleware -> (st -> IO ()) -> IO st -> IO [TChan (st -> IO st)] -> (R.Context -> [TChan (st -> IO st)] -> IO (Component st)) -> IO ()
+run port index connectionOptions middleware setState st exModStChs component = do
   cmpStCh <- newTChanIO
-  W.run port $ R.app index connectionOptions middleware st (step cmpStCh exModStChs component)
+  W.run port $ R.app index connectionOptions middleware st ((,) <$> newTChanIO <*> exModStChs) (step setState component)
 
-runDefault :: Int -> T.Text -> st -> [TChan (st -> IO st)] -> (R.Context -> IO (Component st)) -> IO ()
-runDefault port title st exModStChs component = do
-  cmpStCh <- newTChanIO
-  W.run port $ R.app (V.defaultIndex title []) defaultConnectionOptions id st (step cmpStCh exModStChs component)
+runDefault :: Int -> T.Text -> (st -> IO ()) -> IO st -> IO [TChan (st -> IO st)] -> (R.Context -> [TChan (st -> IO st)] -> IO (Component st)) -> IO ()
+runDefault port title setState st exModStChs component = do
+  W.run port $ R.app (V.defaultIndex title []) defaultConnectionOptions id st ((,) <$> newTChanIO <*> exModStChs) (step setState component)
 
-step :: TChan st -> [TChan (st -> IO st)] -> (R.Context -> IO (Component st)) -> R.Context -> st -> IO (V.HTML, R.Event -> Maybe (IO ()), IO (Maybe st))
-step cmpStCh exModStChs f ctx st = do
-  cmp <- f ctx
+step :: (st -> IO ()) -> (R.Context -> [TChan (st -> IO st)] -> IO (Component st)) -> R.Context -> st -> (TChan st, [TChan (st -> IO st)]) -> IO (V.HTML, R.Event -> Maybe (IO ()), IO (Maybe st))
+step setState f ctx st (cmpStCh, exModStChs) = do
+  cmp <- f ctx exModStChs
   let html = Refract.runComponent cmp (atomically . writeTChan cmpStCh) st
   pure
     ( html
@@ -54,4 +53,6 @@ step cmpStCh exModStChs f ctx st = do
         [ fmap pure . const <$> readTChan cmpStCh
         , asum $ map readTChan exModStChs
         ]
-      f st
+      st' <- f st
+      setState st'
+      pure st'

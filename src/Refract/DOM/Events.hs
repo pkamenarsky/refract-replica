@@ -2,17 +2,21 @@
 
 module Refract.DOM.Events where
 
-import           Control.Monad.Fix         (mfix)
+import           Control.Monad.Fix            (mfix)
+import           Control.Monad.IO.Class       (liftIO)
 import qualified Control.Monad.Trans.State as ST
 
-import           Refract.DOM.Props         (Props(Props), Prop(PropEvent))
+import           Control.Concurrent.STM       (atomically)
+import           Control.Concurrent.STM.TChan (TChan, writeTChan)
 
-import           Data.Aeson                ((.:), (.:?))
+import           Refract.DOM.Props            (Props(Props), Prop(PropEvent))
+
+import           Data.Aeson                   ((.:), (.:?))
 import qualified Data.Aeson                as A
 
 import qualified Data.Text                 as T
 
-import           Replica.VDOM.Types        (DOMEvent(getDOMEvent))
+import           Replica.VDOM.Types           (DOMEvent(getDOMEvent))
 
 import qualified Network.Wai.Handler.Replica as R
 
@@ -224,11 +228,9 @@ dragAndDrop ctx cb event = do
   R.call ctx jsCb js
   where
     js = "var drag = function(f) { \n\
-        \   console.log('drag', f); \n\
         \   callCallback(arg, [f.clientX, f.clientY]); \n\
         \ }; \n\
         \ var up = function() { \n\
-        \   console.log('up', drag, up); \n\
         \   window.removeEventListener('mousemove', drag); \n\
         \   window.removeEventListener('mouseup', up); \n\
         \   callCallback(arg, null); \n\
@@ -244,3 +246,23 @@ dragAndDrop ctx cb event = do
     dragged jsCb xy@(Just (x, y)) = cb $ DragDragged
       (x - mouseClientX event)
       (y - mouseClientY event)
+
+type DragHandler st = 
+     MouseEvent
+  -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragStarted
+  -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
+  -> ST.StateT st IO () -- ^ dragFinished
+  -> ST.StateT st IO ()
+
+startDrag
+  :: R.Context
+  -> TChan (st -> IO st) -- ^ setState
+  -> DragHandler st
+startDrag ctx modStCh mouseEvent started dragged finished
+  = liftIO $ dragAndDrop ctx writeState mouseEvent
+  where
+    action (DragStarted x y) = started x y
+    action (DragDragged x y) = dragged x y
+    action DragNone = finished
+
+    writeState ds = atomically $ writeTChan modStCh $ ST.execStateT (action ds)

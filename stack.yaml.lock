@@ -10,11 +10,11 @@ packages:
     git: https://github.com/pkamenarsky/replica.git
     pantry-tree:
       size: 1319
-      sha256: ca14da7d313016487ff53eab3ec410f86270c2f8431f2e2676e6dd79dd12ffd3
-    commit: 4e7b83bdca01045f7e087dd638ac5e3be4e8d41a
+      sha256: f0f5f9fdfdf04628ce4c6b8c08938897b26a3defda9ce484f1959ecf18b4e5d4
+    commit: a7d742ba0d81b1af8084ca84b8db832c163e35a1
   original:
     git: https://github.com/pkamenarsky/replica.git
-    commit: 4e7b83bdca01045f7e087dd638ac5e3be4e8d41a
+    commit: a7d742ba0d81b1af8084ca84b8db832c163e35a1
 snapshots:
 - completed:
     size: 532380
