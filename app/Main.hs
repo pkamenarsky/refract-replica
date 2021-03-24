@@ -65,7 +65,8 @@ showTree :: Int -> Lens' st Node -> Component st
 showTree level l = stateL l $ \Node {..} -> div [ style padding ] $ mconcat
   [ [ span
         [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
-        [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ] ]
+        [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
+    ]
 
   , if _nodeOpen
       then
