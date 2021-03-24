@@ -86,34 +86,37 @@ showTree level l = stateL l $ \Node {..} -> div [ style padding ] $ mconcat
 
 tree = Node False "/root" [ Node False "/home" [ Node False "/phil" [], Node False "/satan" [] ], Node False "/etc" [] ]
 
-data RectState = RectState
+data WindowState = WindowState
   { _positionX :: Int
   , _positionY :: Int
   , _dragX :: Int
   , _dragY :: Int
   } deriving Show
 
-makeLenses ''RectState
+makeLenses ''WindowState
+
+defaultWindowState :: WindowState
+defaultWindowState = WindowState
+  { _positionX = 100
+  , _positionY = 100
+  , _dragX = 0
+  , _dragY = 0
+  }
 
 data State = State
   { _root :: Node
-  , _rectState :: RectState
+  , _windowStates :: [WindowState]
   } deriving Show
 
 defaultState = State
   { _root = tree
-  , _rectState = RectState
-      { _positionX = 100
-      , _positionY = 100
-      , _dragX = 0
-      , _dragY = 0
-      }
+  , _windowStates = [defaultWindowState, defaultWindowState]
   }
 
 makeLenses ''State
 
-draggable :: DragHandler st -> Lens' st RectState -> Component st
-draggable startDrag l = stateL l $ \rs -> div
+window :: Component st -> DragHandler st -> Lens' st WindowState -> Component st
+window cmp startDrag l = stateL l $ \rs -> div
   [ css rs ]
   [ div
       [ header
@@ -122,10 +125,11 @@ draggable startDrag l = stateL l $ \rs -> div
           (\x y -> modify $ over l $ \rs' -> rs' { _dragX = x, _dragY = y })
           (modify $ over l $ \rs' -> rs' { _positionX = _positionX rs' + _dragX rs', _positionY = _positionY rs' + _dragY rs', _dragX = 0, _dragY = 0 })
       ] []
+  , div [ content ] [ cmp ]
   ]
   where
     px x = pack (show x) <> "px"
-    css RectState {..} = style
+    css WindowState {..} = style
       [ ("position", "absolute")
       , ("left", px (_positionX + _dragX))
       , ("top", px (_positionY + _dragY))
@@ -142,6 +146,15 @@ draggable startDrag l = stateL l $ \rs -> div
       , ("height", px 24)
       , ("backgroundColor", "#333")
       , ("borderRadius", "2px 2px 0px 0px")
+      ]
+    content = style
+      [ ("position", "absolute")
+      , ("left", px 0)
+      , ("top", px 24)
+      , ("width", "100%")
+      , ("bottom", px 0)
+      , ("backgroundColor", "#fff")
+      , ("userSelect", "none")
       ]
 
 type DragHandler st = 
@@ -170,9 +183,9 @@ main = do
   runDefault 3777 "Tree" defaultState [ddChan] $ \ctx -> do
 
   pure $ let drag = startDrag ctx ddChan in
-    div []
-      [ state $ \st -> text (pack $ show st)
-      , showTree 0 root
-      , showTree 0 root
-      , draggable drag rectState
+    state $ \st -> div [] $ mconcat
+      [ [ text (pack $ show st) ]
+      , [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
+        | (i, _) <- zip [0..] (_windowStates st)
+        ]
       ]
