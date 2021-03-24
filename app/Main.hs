@@ -50,6 +50,9 @@ toLens d t = lens (fromMaybe d . preview t) (\a b -> set t b a)
 unsafeIx :: Int -> Lens' [a] a
 unsafeIx x = toLens (error "unsafeIx") $ ix x
 
+tuple :: Lens' st a -> Lens' st b -> Lens' st (a, b)
+tuple x y = lens (\st -> (view x st, view y st)) (\st (a, b) -> set y b $ set x a st)
+
 px :: Int -> Text
 px x = pack (show x) <> "px"
 
@@ -96,18 +99,19 @@ showTree level l = stateL l $ \NodeState {..} -> div [ style css ] $ mconcat
 
 -- Window  ---------------------------------------------------------------------
 
-data WindowState = WindowState
+data WindowState w = WindowState
   { _positionX :: Int
   , _positionY :: Int
   , _width :: Int
   , _height :: Int
   , _dragX :: Int
   , _dragY :: Int
+  , _windowState :: w
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 makeLenses ''WindowState
 
-defaultWindowState :: WindowState
+defaultWindowState :: WindowState ()
 defaultWindowState = WindowState
   { _positionX = 100
   , _positionY = 100
@@ -115,9 +119,10 @@ defaultWindowState = WindowState
   , _height = 200
   , _dragX = 0
   , _dragY = 0
+  , _windowState = ()
   }
 
-window :: Component st -> DragHandler st -> Lens' st WindowState -> Component st
+window :: Component st -> DragHandler st -> Lens' st (WindowState a) -> Component st
 window cmp startDrag l = stateL l $ \rs -> div
   [ css rs ]
   [ div
@@ -161,33 +166,47 @@ window cmp startDrag l = stateL l $ \rs -> div
 
 -- Song ------------------------------------------------------------------------
 
-data SongState = SongState
+data DroppedState = DroppedState
+  { _dsX :: Int
+  , _dsY :: Int
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
+makeLenses ''DroppedState
+
+data ShareableState = ShareableState
   { _ssDragged :: Bool
   , _ssDragX :: Int
   , _ssDragY :: Int
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
-makeLenses ''SongState
+makeLenses ''ShareableState
 
-defaultSongState :: SongState
-defaultSongState = SongState
+defaultShareableState :: ShareableState
+defaultShareableState = ShareableState
   { _ssDragged = False
   , _ssDragX = 0
   , _ssDragY = 0
   }
 
-song :: DragHandler st -> Lens' st SongState -> Lens' st [DroppedState] -> Component st
+shareable
+  :: DragHandler st
+  -> Lens' st ShareableState
+  -> Lens' st [DroppedState]
+  -> Props st
+shareable startDrag l lds = onMouseDown $ \e -> startDrag e
+  (\_ _ -> modify $ over l $ \st' -> st' { _ssDragged = True } )
+  (\x y -> modify $ over l $ \st' -> st' { _ssDragX = x, _ssDragY = y } )
+  $ do
+      st <- view l <$> get
+      modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
+      modify $ over l $ \st' -> st' { _ssDragged = False, _ssDragX = 0, _ssDragY = 0 }
+
+song :: DragHandler st -> Lens' st ShareableState -> Lens' st [DroppedState] -> Component st
 song startDrag l lds = stateL l $ \st -> div []
   [ div [ css ]
       [ div
           [ style dragHandle
-          , onMouseDown $ \e -> startDrag e
-              (\_ _ -> modify $ over l $ \st' -> st' { _ssDragged = True } )
-              (\x y -> modify $ over l $ \st' -> st' { _ssDragX = x, _ssDragY = y } )
-              $ do
-                  st <- view l <$> get
-                  modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
-                  modify $ over l $ \st' -> st' { _ssDragged = False, _ssDragX = 0, _ssDragY = 0 }
+          , shareable startDrag l lds
           ] []
       ]
   , if _ssDragged st
@@ -213,7 +232,7 @@ song startDrag l lds = stateL l $ \st -> div []
       , ("backgroundColor", "#333")
       ]
 
-    dragged SongState {..} = style
+    dragged ShareableState {..} = style
       [ ("position", "absolute")
       , ("left", px (300 + _ssDragX))
       , ("top", px (300 + _ssDragY))
@@ -221,13 +240,6 @@ song startDrag l lds = stateL l $ \st -> div []
       , ("height", px 50)
       , ("backgroundColor", "#333")
       ]
-
-data DroppedState = DroppedState
-  { _dsX :: Int
-  , _dsY :: Int
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-makeLenses ''DroppedState
 
 dropped :: Lens' st DroppedState -> Component st
 dropped l = stateL l $ \st ->div [ css st ] []
@@ -241,12 +253,20 @@ dropped l = stateL l $ \st ->div [ css st ] []
       , ("backgroundColor", "#333")
       ]
 
+--------------------------------------------------------------------------------
+
+data Window w st = Window
+  { wndOnDrop :: ShareableState -> WindowState w -> WindowState w
+  , wndLens :: Lens' st (WindowState w)
+  , wndComponent :: Component st
+  }
+
 -- OS --------------------------------------------------------------------------
 
 data State = State
   { _root :: NodeState
-  , _windowStates :: [WindowState]
-  , _songState :: SongState
+  , _windowStates :: [WindowState ()]
+  , _shareableState :: ShareableState
   , _droppedState :: [DroppedState]
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
@@ -255,7 +275,7 @@ makeLenses ''State
 defaultState = State
   { _root = defaultNodeState
   , _windowStates = [defaultWindowState, defaultWindowState]
-  , _songState = defaultSongState
+  , _shareableState = defaultShareableState
   , _droppedState = []
   }
 
@@ -268,7 +288,7 @@ main = do
           [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
           | (i, _) <- zip [0..] (_windowStates st)
           ]
-        , [ song drag songState droppedState ]
+        , [ song drag shareableState droppedState ]
         , [ dropped (droppedState % unsafeIx  i)
           | (i, _) <- zip [0..] (_droppedState st)
           ]
