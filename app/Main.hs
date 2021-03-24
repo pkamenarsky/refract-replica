@@ -5,7 +5,11 @@
 module Main where
 
 import Control.Monad.Trans.State (modify)
+import qualified Control.Monad.Trans.State as ST
 import Control.Monad.IO.Class (liftIO)
+
+import Control.Concurrent.STM (atomically, retry)
+import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 
 import Data.Text (Text, pack)
 import Data.Tuple.Optics
@@ -27,6 +31,8 @@ import Refract.DOM.Props
 import Refract.DOM
 import Refract
 
+import qualified Network.Wai.Handler.Replica as R
+
 import Prelude hiding (div, span)
 
 stateL :: Lens' st a -> (a -> Component st) -> Component st
@@ -46,7 +52,7 @@ counter' l = stateL l $ \st -> div []
   ]
 
 counter :: IO ()
-counter = runDefault 3777 "Counter" [i | i <- [0..10]] $ \_ -> pure $ div []
+counter = runDefault 3777 "Counter" [i | i <- [0..10]] [] $ \_ -> pure $ div []
   [ counter' (toLens 0 $ ix i)
   | i <- [0..10]
   ]
@@ -80,46 +86,93 @@ showTree level l = stateL l $ \Node {..} -> div [ style padding ] $ mconcat
 
 tree = Node False "/root" [ Node False "/home" [ Node False "/phil" [], Node False "/satan" [] ], Node False "/etc" [] ]
 
+data RectState = RectState
+  { _positionX :: Int
+  , _positionY :: Int
+  , _dragX :: Int
+  , _dragY :: Int
+  } deriving Show
+
+makeLenses ''RectState
+
 data State = State
   { _root :: Node
-  , _dragState :: DragState
+  , _rectState :: RectState
   } deriving Show
 
 defaultState = State
   { _root = tree
-  , _dragState = DragNone
+  , _rectState = RectState
+      { _positionX = 100
+      , _positionY = 100
+      , _dragX = 0
+      , _dragY = 0
+      }
   }
 
 makeLenses ''State
 
-draggable :: (MouseEvent -> IO ()) -> Lens' st DragState -> Component st
-draggable drag l = stateL l $ \ds -> div
-  [ css ds
-  , onMouseDown $ \e -> liftIO (drag e)
-  ] []
+draggable :: DragHandler st -> Lens' st RectState -> Component st
+draggable startDrag l = stateL l $ \rs -> div
+  [ css rs ]
+  [ div
+      [ header
+      , onMouseDown $ \e -> startDrag e
+          (\_ _ -> pure ())
+          (\x y -> modify $ over l $ \rs' -> rs' { _dragX = x, _dragY = y })
+          (modify $ over l $ \rs' -> rs' { _positionX = _positionX rs' + _dragX rs', _positionY = _positionY rs' + _dragY rs', _dragX = 0, _dragY = 0 })
+      ] []
+  ]
   where
     px x = pack (show x) <> "px"
-    css ds = style
+    css RectState {..} = style
       [ ("position", "absolute")
-      , ("left", px (200 + ox))
-      , ("top", px (200 + oy))
+      , ("left", px (_positionX + _dragX))
+      , ("top", px (_positionY + _dragY))
       , ("width", "200px")
       , ("height", "200px")
-      , ("backgroundColor", "#777")
+      , ("border", "1px solid #333")
+      , ("borderRadius", "5px 5px 0px 0px")
       ]
-      where
-        (ox, oy) = case ds of
-          DragStarted x y -> (x, y)
-          DragDragged x y -> (x, y)
-          DragNone -> (0, 0)
+    header = style
+      [ ("position", "absolute")
+      , ("left", px 0)
+      , ("top", px 0)
+      , ("width", "100%")
+      , ("height", px 24)
+      , ("backgroundColor", "#333")
+      , ("borderRadius", "2px 2px 0px 0px")
+      ]
+
+type DragHandler st = 
+     MouseEvent
+  -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragStarted
+  -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
+  -> ST.StateT st IO () -- ^ dragFinished
+  -> ST.StateT st IO ()
+
+startDrag
+  :: R.Context
+  -> TChan (st -> IO st) -- ^ setState
+  -> DragHandler st
+startDrag ctx modStCh mouseEvent started dragged finished
+  = liftIO $ dragAndDrop ctx writeState mouseEvent
+  where
+    action (DragStarted x y) = started x y
+    action (DragDragged x y) = dragged x y
+    action DragNone = finished
+
+    writeState ds = atomically $ writeTChan modStCh $ ST.execStateT (action ds)
 
 main :: IO ()
-main = runDefault 3777 "Tree" defaultState $ \ctx -> do
+main = do
+  ddChan <- newTChanIO
+  runDefault 3777 "Tree" defaultState [ddChan] $ \ctx -> do
 
-  pure $ state' $ \st setState -> let drag = dragAndDrop ctx (\ds -> setState (set dragState ds st) >> print ds) in
+  pure $ let drag = startDrag ctx ddChan in
     div []
       [ state $ \st -> text (pack $ show st)
       , showTree 0 root
       , showTree 0 root
-      , draggable drag dragState
+      , draggable drag rectState
       ]

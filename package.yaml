@@ -24,6 +24,7 @@ dependencies:
 - aeson
 - containers
 - replica
+- stm
 - text
 - transformers
 - wai

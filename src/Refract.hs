@@ -2,8 +2,12 @@
 
 module Refract where
 
-import qualified Control.Concurrent.MVar as MVar
+import           Control.Applicative ((<|>))
 
+import           Control.Concurrent.STM (atomically, retry)
+import           Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
+
+import           Data.Foldable (asum)
 import qualified Data.Text as T
 
 import qualified Replica.VDOM as V
@@ -25,23 +29,29 @@ state' f = Component $ \setState st -> runComponent (f st setState) setState st
 
 --------------------------------------------------------------------------------
 
-run :: Int -> V.HTML -> ConnectionOptions -> Middleware -> st -> (R.Context -> IO (Component st)) -> IO ()
-run port index connectionOptions middleware st component
-  = W.run port
-  $ R.app index connectionOptions middleware st (step component)
+run :: Int -> V.HTML -> ConnectionOptions -> Middleware -> st -> [TChan (st -> IO st)] -> (R.Context -> IO (Component st)) -> IO ()
+run port index connectionOptions middleware st exModStChs component = do
+  cmpStCh <- newTChanIO
+  W.run port $ R.app index connectionOptions middleware st (step cmpStCh exModStChs component)
 
-runDefault :: Int -> T.Text -> st -> (R.Context -> IO (Component st)) -> IO ()
-runDefault port title st component
-  = W.run port
-  $ R.app (V.defaultIndex title []) defaultConnectionOptions id st (step component)
+runDefault :: Int -> T.Text -> st -> [TChan (st -> IO st)] -> (R.Context -> IO (Component st)) -> IO ()
+runDefault port title st exModStChs component = do
+  cmpStCh <- newTChanIO
+  W.run port $ R.app (V.defaultIndex title []) defaultConnectionOptions id st (step cmpStCh exModStChs component)
 
-step :: (R.Context -> IO (Component st)) -> R.Context -> st -> IO (V.HTML, R.Event -> Maybe (IO ()), IO (Maybe st))
-step f ctx st = do
-  stRef <- MVar.newEmptyMVar
+step :: TChan st -> [TChan (st -> IO st)] -> (R.Context -> IO (Component st)) -> R.Context -> st -> IO (V.HTML, R.Event -> Maybe (IO ()), IO (Maybe st))
+step cmpStCh exModStChs f ctx st = do
   cmp <- f ctx
-  let html = Refract.runComponent cmp (MVar.putMVar stRef) st
+  let html = Refract.runComponent cmp (atomically . writeTChan cmpStCh) st
   pure
     ( html
     , \event -> V.fireEvent html (R.evtPath event) (R.evtType event) (V.DOMEvent $ R.evtEvent event)
-    , Just <$> MVar.takeMVar stRef
+    , Just <$> readSt
     )
+  where
+    readSt = do
+      f <- atomically $ asum
+        [ fmap pure . const <$> readTChan cmpStCh
+        , asum $ map readTChan exModStChs
+        ]
+      f st

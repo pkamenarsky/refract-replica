@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0e815617fe95193418890fa896a441b39bbc6bdebb6229795f93fc0ed224df88
+-- hash: bdc90987c2cbfd8a5666c85e47f26286e121e3fd97f83e42632429cc5687dc82
 
 name:           refract-replica
 version:        0.1.0.0
@@ -40,6 +40,7 @@ library
     , base >=4.7 && <5
     , containers
     , replica
+    , stm
     , text
     , transformers
     , wai
@@ -62,6 +63,7 @@ executable refract-replica-exe
     , optics
     , refract-replica
     , replica
+    , stm
     , text
     , transformers
     , wai
@@ -84,6 +86,7 @@ test-suite refract-replica-test
     , containers
     , refract-replica
     , replica
+    , stm
     , text
     , transformers
     , wai

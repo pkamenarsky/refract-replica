@@ -22,12 +22,12 @@ extractResult (A.Success a) = a
 extractResult (A.Error e)   = error e
 
 data Target = Target
-  { targetValue :: T.Text
+  { targetValue :: Maybe T.Text
   }
 
 instance A.FromJSON Target where
   parseJSON (A.Object o) = Target
-    <$> o .: "value"
+    <$> o .:? "value"
   parseJSON _ = fail "Expected object"
 
 data BaseEvent = BaseEvent
