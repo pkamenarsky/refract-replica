@@ -51,16 +51,25 @@ unsafeIx x = toLens (error "unsafeIx") $ ix x
 
 -- Tree ------------------------------------------------------------------------
 
-data Node = Node
+data NodeState = NodeState
   { _nodeOpen :: Bool
   , _nodeName :: Text
-  , _nodeChildren :: [Node]
+  , _nodeChildren :: [NodeState]
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
-makeLenses ''Node
+makeLenses ''NodeState
 
-showTree :: Int -> Lens' st Node -> Component st
-showTree level l = stateL l $ \Node {..} -> div [ style css ] $ mconcat
+defaultNodeState :: NodeState
+defaultNodeState = NodeState False "/root"
+  [ NodeState False "/home"
+      [ NodeState False "/phil" []
+      , NodeState False "/satan" []
+      ]
+  , NodeState False "/etc" []
+  ]
+
+showTree :: Int -> Lens' st NodeState -> Component st
+showTree level l = stateL l $ \NodeState {..} -> div [ style css ] $ mconcat
   [ [ span
         [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
         [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
@@ -80,8 +89,6 @@ showTree level l = stateL l $ \Node {..} -> div [ style css ] $ mconcat
       , ("fontSize", "14px")
       , ("lineHeight", "18px")
       ]
-
-tree = Node False "/root" [ Node False "/home" [ Node False "/phil" [], Node False "/satan" [] ], Node False "/etc" [] ]
 
 -- Window  ---------------------------------------------------------------------
 
@@ -149,17 +156,27 @@ window cmp startDrag l = stateL l $ \rs -> div
       , ("overflow", "auto")
       ]
 
+-- Song ------------------------------------------------------------------------
+
+data SongState = SongState
+  {
+  }
+
+song :: Component st
+song = undefined
+
+
 -- OS --------------------------------------------------------------------------
 
 data State = State
-  { _root :: Node
+  { _root :: NodeState
   , _windowStates :: [WindowState]
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 makeLenses ''State
 
 defaultState = State
-  { _root = tree
+  { _root = defaultNodeState
   , _windowStates = [defaultWindowState, defaultWindowState]
   }
 
