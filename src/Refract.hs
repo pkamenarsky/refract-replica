@@ -20,6 +20,9 @@ import qualified Network.Wai.Handler.Warp as W
 state :: (st -> Component st) -> Component st
 state f = Component $ \setState st -> runComponent (f st) setState st
 
+state' :: (st -> (st -> IO ()) -> Component st) -> Component st
+state' f = Component $ \setState st -> runComponent (f st setState) setState st
+
 --------------------------------------------------------------------------------
 
 run :: Int -> V.HTML -> ConnectionOptions -> Middleware -> st -> (R.Context -> IO (Component st)) -> IO ()

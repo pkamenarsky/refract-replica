@@ -5,6 +5,7 @@
 module Main where
 
 import Control.Monad.Trans.State (modify)
+import Control.Monad.IO.Class (liftIO)
 
 import Data.Text (Text, pack)
 import Data.Tuple.Optics
@@ -60,11 +61,6 @@ data Node = Node
 
 makeLenses ''Node
 
-data DragState
-
-dragDrop :: Lens' st DragState -> Component st
-dragDrop = undefined
-
 showTree :: Int -> Lens' st Node -> Component st
 showTree level l = stateL l $ \Node {..} -> div [ style padding ] $ mconcat
   [ [ span
@@ -83,12 +79,46 @@ showTree level l = stateL l $ \Node {..} -> div [ style padding ] $ mconcat
 
 tree = Node False "/root" [ Node False "/home" [ Node False "/phil" [], Node False "/satan" [] ], Node False "/etc" [] ]
 
-main :: IO ()
-main = runDefault 3777 "Tree" tree $ \ctx -> do
-  registerDragAndDrop ctx print
+data State = State
+  { _root :: Node
+  , _dragState :: DragState
+  } deriving Show
 
-  pure $ div []
-    [ state $ \st -> text (pack $ show st)
-    , showTree 0 (castOptic simple)
-    , showTree 0 (castOptic simple)
-    ]
+defaultState = State
+  { _root = tree
+  , _dragState = DragNone
+  }
+
+makeLenses ''State
+
+draggable :: (MouseEvent -> IO ()) -> Lens' st DragState -> Component st
+draggable drag l = stateL l $ \ds -> div
+  [ css ds
+  , onMouseDown $ \e -> liftIO (drag e)
+  ] []
+  where
+    px x = pack (show x) <> "px"
+    css ds = style
+      [ ("position", "absolute")
+      , ("left", px (200 + ox))
+      , ("top", px (200 + oy))
+      , ("width", "200px")
+      , ("height", "200px")
+      , ("backgroundColor", "#777")
+      ]
+      where
+        (ox, oy) = case ds of
+          DragStarted x y -> (x, y)
+          DragDragged x y -> (x, y)
+          DragNone -> (0, 0)
+
+main :: IO ()
+main = runDefault 3777 "Tree" defaultState $ \ctx -> do
+
+  pure $ state' $ \st setState -> let drag = dragAndDrop ctx (\ds -> setState (set dragState ds st) >> print ds) in
+    div []
+      [ state $ \st -> text (pack $ show st)
+      , showTree 0 root
+      , showTree 0 root
+      , draggable drag dragState
+      ]

@@ -210,41 +210,11 @@ onDrag f = Props "onDrag" (PropEvent (f . extractResult . A.fromJSON . getDOMEve
 
 --------------------------------------------------------------------------------
 
-mouseDownAndDragAndDrop :: R.Context -> (Maybe (Int, Int) -> IO ()) -> IO ()
-mouseDownAndDragAndDrop ctx cb = do
-  jsCb <- mfix $ \jsCb -> do
-    jsCb <- R.registerCallback ctx (dragged jsCb)
-    pure jsCb
-
-  R.call ctx jsCb js
-  where
-    js = "var down = function(e) { \n\
-           \ e.preventDefault(); \n\
-           \ var drag = function(f) { \n\
-           \   callCallback(arg, [f.clientX, f.clientY]); \n\
-           \ }; \n\
-           \ window.addEventListener('mousemove', drag); \n\
-           \ var up = function() { \n\
-           \   window.removeEventListener('mousemove', drag); \n\
-           \   window.removeEventListener('mousedown', down); \n\
-           \   window.removeEventListener('mouseup', up); \n\
-           \   callCallback(arg, null); \n\
-           \ }; \n\
-           \ window.addEventListener('mouseup', up); \n\
-         \}; \n\
-         \window.addEventListener('mousedown', down); \n\
-         \"
-
-    dragged :: R.Callback -> Maybe (Int, Int) -> IO ()
-    dragged jsCb xy@Nothing = do
-      R.unregisterCallback ctx jsCb
-      cb xy
-    dragged jsCb xy = cb xy
-
 data DragState = DragStarted Int Int | DragDragged Int Int | DragNone
+  deriving (Eq, Ord, Show)
 
-dragAndDrop :: R.Context -> MouseEvent -> (DragState -> IO ()) -> IO ()
-dragAndDrop ctx event cb = do
+dragAndDrop :: R.Context -> (DragState -> IO ()) -> MouseEvent -> IO ()
+dragAndDrop ctx cb event = do
   jsCb <- mfix $ \jsCb -> do
     jsCb <- R.registerCallback ctx (dragged jsCb)
     pure jsCb
@@ -254,18 +224,18 @@ dragAndDrop ctx event cb = do
   R.call ctx jsCb js
   where
     js = "var drag = function(f) { \n\
+        \   console.log('drag', f); \n\
         \   callCallback(arg, [f.clientX, f.clientY]); \n\
         \ }; \n\
         \ var up = function() { \n\
+        \   console.log('up', drag, up); \n\
         \   window.removeEventListener('mousemove', drag); \n\
-        \   window.removeEventListener('mousedown', down); \n\
         \   window.removeEventListener('mouseup', up); \n\
         \   callCallback(arg, null); \n\
         \ }; \n\
         \ window.addEventListener('mousemove', drag); \n\
         \ window.addEventListener('mouseup', up); \n\
-      \}; \n\
-      \"
+        \"
 
     dragged :: R.Callback -> Maybe (Int, Int) -> IO ()
     dragged jsCb xy@Nothing = do
