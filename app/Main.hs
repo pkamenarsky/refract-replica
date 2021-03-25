@@ -73,8 +73,8 @@ oneOrWarning p l f = state $ \st -> case preview l st of
       [ ("position", "absolute")
       , ("left", px 0) -- TODO
       , ("top", px 0)
-      , ("width", px 50)
-      , ("height", px 50)
+      , ("right", px 0)
+      , ("bottom", px 0)
       , ("backgroundColor", "#f00")
       ]
 
@@ -106,7 +106,6 @@ shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dra
         }
     dragDragging x y = modify $ set (l % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
     dragDropped = modify $ set l Nothing
-
 
 -- Window  ---------------------------------------------------------------------
 
@@ -280,13 +279,13 @@ main = do
         , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance bounds drag draggedInstance global ]
         ]
   where
-    frame = style
-      [ ("backgroundColor", "#bbb")
-      , ("width", "100%")
-      , ("height", "1000px")
-      , ("margin", px 0)
-      , ("padding", px 0)
-      ]
+    frame = style []
+      -- [ ("backgroundColor", "#bbb")
+      -- , ("width", "100%")
+      -- , ("height", "1000px")
+      -- , ("margin", px 0)
+      -- , ("padding", px 0)
+      -- ]
 
     storeState st = Store.writeStore (Store.Store 0) $ A.encode st
 
