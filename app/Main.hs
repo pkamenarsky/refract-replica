@@ -64,7 +64,7 @@ px x = pack (show x) <> "px"
 -- Tree ------------------------------------------------------------------------
 
 showTree :: Int -> Lens' st NodeState -> Component st
-showTree level l = stateL l $ \NodeState {..} -> div [ style css ] $ mconcat
+showTree level l = stateL l $ \NodeState {..} -> div [ style frame ] $ mconcat
   [ [ span
         [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
         [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
@@ -78,7 +78,7 @@ showTree level l = stateL l $ \NodeState {..} -> div [ style css ] $ mconcat
       else []
   ]
   where
-    css =
+    frame =
       [ ("paddingLeft", pack (show $ level * 12) <> "px")
       , ("fontFamily", "Helvetica")
       , ("fontSize", "14px")
@@ -89,22 +89,24 @@ showTree level l = stateL l $ \NodeState {..} -> div [ style css ] $ mconcat
 
 window :: Component st -> DragHandler st -> Lens' st WindowState -> Component st
 window cmp startDrag l = stateL l $ \ws -> div
-  [ css ws ]
+  [ frame ws ]
   [ div
       [ header
-      , onMouseDown $ \e -> startDrag e
-          dragStarted -- (\_ _ -> pure ())
-          dragDragging -- (\x y -> modify $ over l $ \rs' -> rs' { _dragX = x, _dragY = y })
-          dragDropped -- (modify $ over l $ \rs' -> rs' { _positionX = _positionX rs' + _dragX rs', _positionY = _positionY rs' + _dragY rs', _dragX = 0, _dragY = 0 })
+      , onMouseDown $ \e -> startDrag e dragStarted dragDragging dragDropped
       ] []
   , div [ content ] [ cmp ]
   ]
   where
-    dragStarted _ _ = pure ()
-    dragDragging x y = modify $ set (l % _wndDragOffset % _Just) $ Point x y
-    dragDropped = undefined
+    dragStarted _ _ = modify $ set (l % wndDragOffset % _Just) $ Point 0 0
+    dragDragging x y = modify $ set (l % wndDragOffset % _Just) $ Point x y
+    dragDropped = modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
+      { _wndRect = case offset of
+          Just (Point ox oy) -> Rect (x + ox) (y + oy) w h
+          Nothing -> _wndRect st
+      , _wndDragOffset = Nothing
+      }
 
-    css WindowState {..} = style
+    frame WindowState {..} = style
       [ ("position", "absolute")
       , ("left", px (x + ox))
       , ("top", px (y + oy))
@@ -139,12 +141,12 @@ window cmp startDrag l = stateL l $ \ws -> div
 
 -- Song ------------------------------------------------------------------------
 
-shareable
+shareable'
   :: DragHandler st
   -> Lens' st (Maybe DraggableState)
   -> Lens' st [DroppedState]
   -> Props st
-shareable startDrag l lds = onMouseDown $ \e -> startDrag e
+shareable' startDrag l lds = onMouseDown $ \e -> startDrag e
   dragStarted
   dragDragging
   dragDropped
@@ -163,10 +165,10 @@ shareable startDrag l lds = onMouseDown $ \e -> startDrag e
 
 song :: DragHandler st -> Lens' st (Maybe DraggableState) -> Lens' st [DroppedState] -> Component st
 song startDrag l lds = stateL l $ \st -> div []
-  [ div [ css ]
+  [ div [ frame ]
       [ div
           [ style dragHandle
-          , shareable startDrag l lds
+          , shareable' startDrag l lds
           ] []
       ]
   , case st of
@@ -174,7 +176,7 @@ song startDrag l lds = stateL l $ \st -> div []
       Nothing -> div [] []
   ]
   where
-    css = style
+    frame = style
       [ ("position", "absolute")
       , ("left", px 300)
       , ("top", px 300)
@@ -202,9 +204,9 @@ song startDrag l lds = stateL l $ \st -> div []
       ]
 
 dropped :: Lens' st DroppedState -> Component st
-dropped l = stateL l $ \st ->div [ css st ] []
+dropped l = stateL l $ \st ->div [ frame st ] []
   where
-    css DroppedState {..} = style
+    frame DroppedState {..} = style
       [ ("position", "absolute")
       , ("left", px _dsX)
       , ("top", px _dsY)
@@ -217,10 +219,10 @@ dropped l = stateL l $ \st ->div [ css st ] []
 
 safeguard :: Path -> AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
 safeguard p l f = state $ \st -> case preview l st of
-  Nothing -> div [ css ] []
+  Nothing -> div [ frame ] []
   Just _ -> f (toLens (error "defaultComponent") l)
   where
-    css = style
+    frame = style
       [ ("position", "absolute")
       , ("left", px 0) -- TODO
       , ("top", px 0)
@@ -229,11 +231,10 @@ safeguard p l f = state $ \st -> case preview l st of
       , ("backgroundColor", "#f00")
       ]
 
-data InstanceInfo st = forall sti. InstanceInfo (Lens' st sti) (Component st) (DraggableState -> sti -> sti)
-
-componentForInstance :: Instance -> Component A.Value
-componentForInstance InstanceRect = div [] []
-componentForInstance (InstanceTree p) = safeguard p (pathToLens p) (showTree 0)
+componentForInstance :: DragHandler st -> Lens' st InstanceState -> Lens' st A.Value -> Component st
+componentForInstance startDrag lis lv = stateL lis $ \st -> case _instInstance st of
+  InstanceRect -> div [] []
+  InstanceTree p-> window (safeguard p (lv % pathToLens p) (showTree 0)) startDrag (lis % instWindowState)
 
 dropOnInstance :: DraggableState -> Instance -> A.Value -> A.Value
 dropOnInstance st (InstanceTree p) = over (pathToLens p) dropOnTree
@@ -251,22 +252,22 @@ main :: IO ()
 main = do
   runDefault 3777 "Tree" storeState readStore (pure <$> newTChanIO) $ \ctx [ddChan] ->
     let drag = startDrag ctx ddChan in state $ \st ->
-      div [ css ] $ mconcat
+      div [ frame ] $ mconcat
         [ [ text (pack $ show st) ]
         , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
-        , [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
+        , [ window (showTree 0 nodeState) drag (windowStates % unsafeIx  i)
           | (i, _) <- zip [0..] (_windowStates st)
           ]
         , [ song drag draggableState droppedState ]
         , [ dropped (droppedState % unsafeIx  i)
           | (i, _) <- zip [0..] (_droppedState st)
           ]
-        , [ zoom global $ componentForInstance inst
-          | inst <- _instances st
-          ]
+        -- , [ zoom global $ componentForInstance inst
+        --   | inst <- _instances st
+        --   ]
         ]
   where
-    css = style
+    frame = style
       [ ("backgroundColor", "#bbb")
       , ("width", "100%")
       , ("height", "1000px")

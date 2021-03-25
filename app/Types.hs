@@ -42,7 +42,7 @@ whenJust (Just a) f = f a
 data Rect = Rect Int Int Int Int
   deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
-data Point = Point { x :: Int, y :: Int }
+data Point = Point { _pointX :: Int, _pointY :: Int }
   deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 origin :: Point
@@ -87,7 +87,7 @@ data DraggableState = DraggableState
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 data State = State
-  { _root :: NodeState
+  { _nodeState :: NodeState
   , _windowStates :: [WindowState]
   , _draggableState :: Maybe DraggableState
   , _draggableInstance :: Maybe InstanceState
@@ -102,7 +102,7 @@ globalState = A.object
   ]
 
 defaultState = State
-  { _root = defaultNodeState
+  { _nodeState = defaultNodeState
   , _windowStates = [defaultWindowState, defaultWindowState]
   , _draggableState = Nothing
   , _draggableInstance = Nothing
@@ -152,4 +152,6 @@ makeLenses ''DroppedState
 makeLenses ''WindowState
 makeLenses ''NodeState
 makeLenses ''DraggableState
+makeLenses ''Instance
+makeLenses ''InstanceState
 makeLenses ''State
