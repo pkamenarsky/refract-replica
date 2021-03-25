@@ -34,17 +34,25 @@ type GetBounds = Refract.DomPath -> IO (Double, Double, Double, Double)
 
 getBounds :: R.Context -> GetBounds
 getBounds ctx path = do
-  rect <- newEmptyMVar
-  cb <- R.registerCallback ctx (putMVar rect)
+  rectRef <- newEmptyMVar
+  cb <- R.registerCallback ctx (putMVar rectRef)
   R.call ctx (cb, reverse path) js
-  takeMVar rect
+  rect <- takeMVar rectRef
+  R.unregisterCallback ctx cb
+  pure rect
   where
-    js = undefined
-      "let element = document.body; \n\
-    \ for (let i = 0; i < arg[1].length; i++) { \n\
-    \  element = element.childNodes[arg[1][i]]; \n\
-    \ let rect = element.getBoundingClientRect(); \n\
-    \ callCallback(arg[0], [rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top]);"
+    js = "var element = document.body; \n\
+     \ arg[1].unshift(1); \n\
+     \ console.log(arg); \n\
+     \ for (let i = 0; i < arg[1].length; i++) { \n\
+     \   console.log('before', element); \n\
+     \   element = element.childNodes[arg[1][i]]; \n\
+     \   console.log('after', element); \n\
+     \ } \n\
+     \ var rect = element.getBoundingClientRect(); \n\
+     \ console.log(element); \n\
+     \ console.log(rect); \n\
+     \ callCallback(arg[0], [rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top]);"
 
 --------------------------------------------------------------------------------
 

@@ -37,6 +37,9 @@ elWithNamespace ns name props children = Component $ \path setState st ->
     toProps setState st (Props k (PropBool v)) = M.singleton k $ VDOM.ABool v
     toProps setState st (Props k (PropMap m)) = M.singleton k $ VDOM.AMap $ M.unions $ map (toProps setState st) m
  
+empty :: Component st
+empty = Component $ \_ _ _ -> []
+
 text :: T.Text -> Component st
 text txt = Component $ \_ _ _ -> [VDOM.VText txt]
 

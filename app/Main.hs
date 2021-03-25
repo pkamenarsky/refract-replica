@@ -97,7 +97,7 @@ window cmp startDrag l = stateL l $ \ws -> div
   , div [ content ] [ cmp ]
   ]
   where
-    dragStarted _ _ = modify $ set (l % wndDragOffset % _Just) origin
+    dragStarted _ _ = modify $ set (l % wndDragOffset) (Just origin)
     dragDragging x y = modify $ set (l % wndDragOffset % _Just) (Point x y)
     dragDropped = modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
       { _wndRect = case offset of
@@ -111,7 +111,7 @@ window cmp startDrag l = stateL l $ \ws -> div
       , ("left", px (x + ox))
       , ("top", px (y + oy))
       , ("width", px w)
-      , ("height", px y)
+      , ("height", px h)
       , ("border", "1px solid #333")
       , ("borderRadius", "5px 5px 0px 0px")
       ]
@@ -232,9 +232,14 @@ safeguard p l f = state $ \st -> case preview l st of
       , ("backgroundColor", "#f00")
       ]
 
-componentForInstance :: StartDrag st -> Lens' st InstanceState -> Lens' st A.Value -> Component st
-componentForInstance startDrag lis lv = stateL lis $ \st -> case _instInstance st of
-  InstanceRect -> div [ fill ] []
+oneOrEmpty :: AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
+oneOrEmpty l f = state $ \st -> case preview l st of
+  Nothing -> empty
+  Just _ -> f (toLens (error "defaultComponent") l)
+
+componentForInstance :: StartDrag st -> Lens' st A.Value -> Lens' st InstanceState -> Component st
+componentForInstance startDrag lv lis = stateL lis $ \st -> case _instInstance st of
+  InstanceRect -> window (div [ fill ] []) startDrag (lis % instWindowState)
   InstanceTree p-> window (safeguard p (lv % pathToLens p) (showTree 0)) startDrag (lis % instWindowState)
   where
     fill = style
@@ -266,13 +271,14 @@ main = do
       in state $ \st -> div [ frame ] $ mconcat
         [ [ text (pack $ show st) ]
         , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
-        , [ window (showTree 0 nodeState) drag (windowStates % unsafeIx  i)
+        , [ window (showTree 0 nodeState) drag (windowStates % unsafeIx i)
           | (i, _) <- zip [0..] (_windowStates st)
           ]
         , [ song bounds drag draggableInstance ]
-        , [ dropped (droppedState % unsafeIx  i)
-          | (i, _) <- zip [0..] (_droppedState st)
-          ]
+        , [ oneOrEmpty (draggableInstance % _Just) $ componentForInstance drag global ]
+        -- , [ dropped (droppedState % unsafeIx  i)
+        --   | (i, _) <- zip [0..] (_droppedState st)
+        --   ]
         -- , [ zoom global $ componentForInstance inst
         --   | inst <- _instances st
         --   ]
