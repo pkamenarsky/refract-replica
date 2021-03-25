@@ -6,7 +6,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
@@ -49,6 +48,8 @@ import GHC.Generics (Generic)
 
 import qualified Network.Wai.Handler.Replica as R
 
+import Types
+
 import Prelude hiding (div, span)
 
 stateL :: Lens' st a -> (a -> Component st) -> Component st
@@ -57,36 +58,10 @@ stateL l f = state $ \st -> f (view l st)
 zoom :: Lens' st a -> Component a -> Component st
 zoom l cmp = Component $ \setState st -> runComponent cmp (\a -> setState (set l a st)) (view l st)
 
-toLens :: b -> AffineTraversal' a b -> Lens' a b
-toLens d t = lens (fromMaybe d . preview t) (\a b -> set t b a)
-
-unsafeIx :: Int -> Lens' [a] a
-unsafeIx x = toLens (error "unsafeIx") $ ix x
-
-tuple :: Lens' st a -> Lens' st b -> Lens' st (a, b)
-tuple x y = lens (\st -> (view x st, view y st)) (\st (a, b) -> set y b $ set x a st)
-
 px :: Int -> Text
 px x = pack (show x) <> "px"
 
 -- Tree ------------------------------------------------------------------------
-
-data NodeState = NodeState
-  { _nodeOpen :: Bool
-  , _nodeName :: Text
-  , _nodeChildren :: [NodeState]
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-makeLenses ''NodeState
-
-defaultNodeState :: NodeState
-defaultNodeState = NodeState False "/root"
-  [ NodeState False "/home"
-      [ NodeState False "/phil" []
-      , NodeState False "/satan" []
-      ]
-  , NodeState False "/etc" []
-  ]
 
 showTree :: Int -> Lens' st NodeState -> Component st
 showTree level l = stateL l $ \NodeState {..} -> div [ style css ] $ mconcat
@@ -111,29 +86,6 @@ showTree level l = stateL l $ \NodeState {..} -> div [ style css ] $ mconcat
       ]
 
 -- Window  ---------------------------------------------------------------------
-
-data WindowState w = WindowState
-  { _positionX :: Int
-  , _positionY :: Int
-  , _width :: Int
-  , _height :: Int
-  , _dragX :: Int
-  , _dragY :: Int
-  , _windowState :: w
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-makeLenses ''WindowState
-
-defaultWindowState :: WindowState ()
-defaultWindowState = WindowState
-  { _positionX = 100
-  , _positionY = 100
-  , _width = 200
-  , _height = 200
-  , _dragX = 0
-  , _dragY = 0
-  , _windowState = ()
-  }
 
 window :: Component st -> DragHandler st -> Lens' st (WindowState a) -> Component st
 window cmp startDrag l = stateL l $ \rs -> div
@@ -178,28 +130,6 @@ window cmp startDrag l = stateL l $ \rs -> div
       ]
 
 -- Song ------------------------------------------------------------------------
-
-data DroppedState = DroppedState
-  { _dsX :: Int
-  , _dsY :: Int
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-makeLenses ''DroppedState
-
-data DraggableState = DraggableState
-  { _ssDragged :: Bool
-  , _ssDragX :: Int
-  , _ssDragY :: Int
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-makeLenses ''DraggableState
-
-defaultDraggableState :: DraggableState
-defaultDraggableState = DraggableState
-  { _ssDragged = False
-  , _ssDragX = 0
-  , _ssDragY = 0
-  }
 
 shareable
   :: DragHandler st
@@ -268,27 +198,6 @@ dropped l = stateL l $ \st ->div [ css st ] []
 
 --------------------------------------------------------------------------------
 
-data SongState = SongState deriving (Show, Generic, A.FromJSON, A.ToJSON)
-data PlaylistState = PlaylistState deriving (Show, Generic, A.FromJSON, A.ToJSON)
-
-data Instance
-  = InstanceTree Path
-  | InstanceSong Path
-  | InstancePlaylist [Path]
-  deriving (Show, Generic, A.FromJSON, A.ToJSON)
-
-data PathSegment
-  = Key Text
-  | Index Int
-  deriving (Show, Generic, A.FromJSON, A.ToJSON)
-
-type Path = [PathSegment]
-
-pathToLens :: A.ToJSON a => A.FromJSON a => Path -> AffineTraversal' A.Value a
-pathToLens [] = castOptic A._JSON
-pathToLens (Key k:ps) = A.key k % pathToLens ps
-pathToLens (Index i:ps) = A.nth i % pathToLens ps
-
 safeguard :: Path -> AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
 safeguard p l f = state $ \st -> case preview l st of
   Nothing -> div [ css ] []
@@ -303,43 +212,22 @@ safeguard p l f = state $ \st -> case preview l st of
       , ("backgroundColor", "#f00")
       ]
 
+data InstanceInfo st = forall sti. InstanceInfo (Lens' st sti) (Component st) (DraggableState -> sti -> sti)
+
 componentForInstance :: Instance -> Component A.Value
 componentForInstance (InstanceTree p) = safeguard p (pathToLens p) (showTree 0)
 
-globalState :: A.Value
-globalState = A.object
-  [ "files" A..= A.toJSON defaultNodeState
-  ]
-
---------------------------------------------------------------------------------
-
-data WindowType st w where
-  Folder :: WindowType st [Component st]
-
-windowOnDrop :: WindowType st w -> WindowState w -> WindowState w
-windowOnDrop Folder wst = wst
+dropOnInstance :: DraggableState -> Instance -> A.Value -> A.Value
+dropOnInstance st (InstanceTree p) = over (pathToLens p) dropOnTree
+  where
+    dropOnTree :: NodeState -> NodeState
+    dropOnTree = undefined
+dropOnInstance st (InstanceSong p) = over (pathToLens p) dropOnSong
+  where
+    dropOnSong :: SongState -> SongState
+    dropOnSong = undefined
 
 -- OS --------------------------------------------------------------------------
-
-data State = State
-  { _root :: NodeState
-  , _windowStates :: [WindowState ()]
-  , _draggableState :: DraggableState
-  , _droppedState :: [DroppedState]
-  , _instances :: [Instance]
-  , _global :: A.Value
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-makeLenses ''State
-
-defaultState = State
-  { _root = defaultNodeState
-  , _windowStates = [defaultWindowState, defaultWindowState]
-  , _draggableState = defaultDraggableState
-  , _droppedState = []
-  , _instances = [ InstanceTree [Key "files"] ]
-  , _global = globalState
-  }
 
 main :: IO ()
 main = do
