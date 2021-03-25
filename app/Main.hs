@@ -61,39 +61,42 @@ zoom l cmp = Component $ \path setState st -> runComponent cmp path (\a -> setSt
 px :: Int -> Text
 px x = pack (show x) <> "px"
 
+onTrackedDragEnd :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onTrackedDragEnd = onMouseUp
+
 -- Tree ------------------------------------------------------------------------
 
 showTree :: Maybe InstanceState -> Lens' st NodeState -> Component st
 showTree draggedInst l = div
-  [ onMouseUp $ \e -> case draggedInst of
-      Just inst -> liftIO $ print inst
+  [ onTrackedDragEnd $ \e -> case draggedInst of
+      Just inst -> modify $ set l $ NodeState True "RECT" (NodeArray [])
       Nothing -> pure ()
   ]
-  [ showTree' 0 l ]
-
-showTree' :: Int -> Lens' st NodeState -> Component st
-showTree' level l = stateL l $ \NodeState {..} -> div [ frame ] $ mconcat
-  [ [ span
-        [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
-        [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
-    ]
-
-  , if _nodeOpen
-      then case _nodeChildren of
-        NodeArray children -> 
-          [ showTree' (level + 1) (toLens (error "showTree") $ l % nodeChildren % _NodeArray % ix i)
-          | (i, _) <- zip [0..] children
-          ]  
-        _ -> []
-      else []
-  ]
+  [ go 0 l ]
   where
-    frame = style
-      [ ("paddingLeft", pack (show $ level * 12) <> "px")
-      , ("fontFamily", "Helvetica")
-      , ("fontSize", "14px")
-      , ("lineHeight", "18px")
+    go :: Int -> Lens' st NodeState -> Component st
+    go level l = stateL l $ \NodeState {..} -> div [ frame ] $ mconcat
+      [ [ span
+            [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
+            [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
+        ]
+    
+      , if _nodeOpen
+          then case _nodeChildren of
+            NodeArray children -> 
+              [ go (level + 1) (toLens (error "showTree") $ l % nodeChildren % _NodeArray % ix i)
+              | (i, _) <- zip [0..] children
+              ]  
+            _ -> []
+          else []
       ]
+      where
+        frame = style
+          [ ("paddingLeft", pack (show $ level * 12) <> "px")
+          , ("fontFamily", "Helvetica")
+          , ("fontSize", "14px")
+          , ("lineHeight", "18px")
+          ]
 
 -- Window  ---------------------------------------------------------------------
 
@@ -124,6 +127,10 @@ window cmp startDrag l = stateL l $ \ws -> div
       , ("height", px h)
       , ("border", "1px solid #333")
       , ("borderRadius", if _wndTitleBar then "5px 5px 0px 0px" else "")
+      , ("pointerEvents", case _wndDragOffset of
+            Just _ -> "none"
+            Nothing -> "auto"
+        )
       ]
       where
         Rect x y w h = _wndRect

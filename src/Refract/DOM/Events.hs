@@ -227,10 +227,10 @@ dragAndDrop ctx cb event = do
 
   R.call ctx jsCb js
   where
-    js = "var drag = function(f) { \n\
-        \   callCallback(arg, [f.clientX, f.clientY]); \n\
+    js = "var drag = function(e) { \n\
+        \   callCallback(arg, [e.clientX, e.clientY]); \n\
         \ }; \n\
-        \ var up = function() { \n\
+        \ var up = function(e) { \n\
         \   window.removeEventListener('mousemove', drag); \n\
         \   window.removeEventListener('mouseup', up); \n\
         \   callCallback(arg, null); \n\
