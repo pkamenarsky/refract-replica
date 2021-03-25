@@ -28,6 +28,8 @@ dependencies:
 - stm
 - text
 - transformers
+- unordered-containers
+- vector
 - wai
 - wai-websockets
 - websockets

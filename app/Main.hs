@@ -1,5 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -13,10 +17,13 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 
 import qualified Data.Aeson as A
+import qualified Data.Aeson.Types as A
+import qualified Data.HashMap.Strict as H
 import Data.Text (Text, pack)
 import Data.Tuple.Optics
 import Data.Maybe (fromMaybe)
 import Data.Maybe.Optics
+import qualified Data.Vector as V
 
 import qualified Foreign.Store as Store
 
@@ -173,16 +180,16 @@ data DroppedState = DroppedState
 
 makeLenses ''DroppedState
 
-data ShareableState = ShareableState
+data DraggableState = DraggableState
   { _ssDragged :: Bool
   , _ssDragX :: Int
   , _ssDragY :: Int
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
-makeLenses ''ShareableState
+makeLenses ''DraggableState
 
-defaultShareableState :: ShareableState
-defaultShareableState = ShareableState
+defaultDraggableState :: DraggableState
+defaultDraggableState = DraggableState
   { _ssDragged = False
   , _ssDragX = 0
   , _ssDragY = 0
@@ -190,7 +197,7 @@ defaultShareableState = ShareableState
 
 shareable
   :: DragHandler st
-  -> Lens' st ShareableState
+  -> Lens' st DraggableState
   -> Lens' st [DroppedState]
   -> Props st
 shareable startDrag l lds = onMouseDown $ \e -> startDrag e
@@ -201,7 +208,7 @@ shareable startDrag l lds = onMouseDown $ \e -> startDrag e
       modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
       modify $ over l $ \st' -> st' { _ssDragged = False, _ssDragX = 0, _ssDragY = 0 }
 
-song :: DragHandler st -> Lens' st ShareableState -> Lens' st [DroppedState] -> Component st
+song :: DragHandler st -> Lens' st DraggableState -> Lens' st [DroppedState] -> Component st
 song startDrag l lds = stateL l $ \st -> div []
   [ div [ css ]
       [ div
@@ -232,7 +239,7 @@ song startDrag l lds = stateL l $ \st -> div []
       , ("backgroundColor", "#333")
       ]
 
-    dragged ShareableState {..} = style
+    dragged DraggableState {..} = style
       [ ("position", "absolute")
       , ("left", px (300 + _ssDragX))
       , ("top", px (300 + _ssDragY))
@@ -255,18 +262,70 @@ dropped l = stateL l $ \st ->div [ css st ] []
 
 --------------------------------------------------------------------------------
 
-data Window w st = Window
-  { wndOnDrop :: ShareableState -> WindowState w -> WindowState w
-  , wndLens :: Lens' st (WindowState w)
-  , wndComponent :: Component st
-  }
+data SongState = SongState deriving (Show, Generic, A.FromJSON, A.ToJSON)
+data PlaylistState = PlaylistState deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+data InstanceType st where
+  InstanceTree :: InstanceType NodeState
+  InstanceSong :: InstanceType SongState
+  InstancePlaylist :: InstanceType PlaylistState
+
+instance A.ToJSON (InstanceType st) where
+  toJSON InstanceTree = A.String "tree"
+  toJSON InstanceSong = A.String "song"
+  toJSON InstancePlaylist = A.String "playlist"
+
+data PathSegment = Key Text | Index Int deriving (Show, Generic, A.FromJSON, A.ToJSON)
+type Path = [PathSegment]
+
+keyLens :: Text -> Lens' A.Value A.Value
+keyLens = undefined
+
+indexLens :: Int -> Lens' A.Value A.Value
+indexLens = undefined
+
+pathToLens :: A.FromJSON a => Path -> Lens' A.Value a
+pathToLens path = lens (get path) undefined
+  where
+    pathLens (Key k:ps) = keyLens k % pathLens ps
+    pathLens (Index i:ps) = indexLens i % pathLens ps
+
+    get [] o
+      | A.Success v <- A.fromJSON o = v
+      | otherwise = error "pathToLens"
+    get (Key k:ps) (A.Object o)
+      | Just v <- H.lookup k o = get ps v
+    get (Index i:ps) (A.Array a)
+      | Just v <- a V.!? i = get ps v
+    get _ _ = error "pathToLens"
+
+data Instance = forall sti. (A.FromJSON sti, A.ToJSON sti) => Instance (InstanceType sti) Path
+
+instance A.FromJSON Instance where
+  parseJSON (A.Object o) = do
+    A.String t <- o A..: "type"
+    p <- o A..: "path"
+
+    case t of
+      "tree" -> pure $ Instance InstanceTree p
+      "song" -> pure $ Instance InstanceSong p
+      "playlist" -> pure $ Instance InstancePlaylist p
+
+componentForInstance :: Instance -> Component A.Value
+componentForInstance (Instance t@InstanceTree p) = showTree 0 (pathToLens p)
+
+data WindowType st w where
+  Folder :: WindowType st [Component st]
+
+windowOnDrop :: WindowType st w -> WindowState w -> WindowState w
+windowOnDrop Folder wst = wst
 
 -- OS --------------------------------------------------------------------------
 
 data State = State
   { _root :: NodeState
   , _windowStates :: [WindowState ()]
-  , _shareableState :: ShareableState
+  , _draggableState :: DraggableState
   , _droppedState :: [DroppedState]
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
@@ -275,7 +334,7 @@ makeLenses ''State
 defaultState = State
   { _root = defaultNodeState
   , _windowStates = [defaultWindowState, defaultWindowState]
-  , _shareableState = defaultShareableState
+  , _draggableState = defaultDraggableState
   , _droppedState = []
   }
 
@@ -288,7 +347,7 @@ main = do
           [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
           | (i, _) <- zip [0..] (_windowStates st)
           ]
-        , [ song drag shareableState droppedState ]
+        , [ song drag draggableState droppedState ]
         , [ dropped (droppedState % unsafeIx  i)
           | (i, _) <- zip [0..] (_droppedState st)
           ]

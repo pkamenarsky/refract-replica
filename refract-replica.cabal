@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2ffe720d2909cb21836cc2fc9fc812d09e75c740b7c67050b027529cc75a7f13
+-- hash: 309f67c94159fbec306327fe76af6e9ef030c5772f142ef61a199a8b576c6d62
 
 name:           refract-replica
 version:        0.1.0.0
@@ -44,6 +44,8 @@ library
     , stm
     , text
     , transformers
+    , unordered-containers
+    , vector
     , wai
     , wai-websockets
     , warp
@@ -68,6 +70,8 @@ executable refract-replica-exe
     , stm
     , text
     , transformers
+    , unordered-containers
+    , vector
     , wai
     , wai-websockets
     , warp
@@ -92,6 +96,8 @@ test-suite refract-replica-test
     , stm
     , text
     , transformers
+    , unordered-containers
+    , vector
     , wai
     , wai-websockets
     , warp
