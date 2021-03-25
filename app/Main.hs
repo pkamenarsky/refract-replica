@@ -87,28 +87,36 @@ showTree level l = stateL l $ \NodeState {..} -> div [ style css ] $ mconcat
 
 -- Window  ---------------------------------------------------------------------
 
-window :: Component st -> DragHandler st -> Lens' st (WindowState a) -> Component st
-window cmp startDrag l = stateL l $ \rs -> div
-  [ css rs ]
+window :: Component st -> DragHandler st -> Lens' st WindowState -> Component st
+window cmp startDrag l = stateL l $ \ws -> div
+  [ css ws ]
   [ div
       [ header
       , onMouseDown $ \e -> startDrag e
-          (\_ _ -> pure ())
-          (\x y -> modify $ over l $ \rs' -> rs' { _dragX = x, _dragY = y })
-          (modify $ over l $ \rs' -> rs' { _positionX = _positionX rs' + _dragX rs', _positionY = _positionY rs' + _dragY rs', _dragX = 0, _dragY = 0 })
+          dragStarted -- (\_ _ -> pure ())
+          dragDragging -- (\x y -> modify $ over l $ \rs' -> rs' { _dragX = x, _dragY = y })
+          dragDropped -- (modify $ over l $ \rs' -> rs' { _positionX = _positionX rs' + _dragX rs', _positionY = _positionY rs' + _dragY rs', _dragX = 0, _dragY = 0 })
       ] []
   , div [ content ] [ cmp ]
   ]
   where
+    dragStarted _ _ = pure ()
+    dragDragging x y = modify $ set (l % _wndDragOffset % _Just) $ Point x y
+    dragDropped = undefined
+
     css WindowState {..} = style
       [ ("position", "absolute")
-      , ("left", px (_positionX + _dragX))
-      , ("top", px (_positionY + _dragY))
-      , ("width", px _width)
-      , ("height", px _height)
+      , ("left", px (x + ox))
+      , ("top", px (y + oy))
+      , ("width", px w)
+      , ("height", px y)
       , ("border", "1px solid #333")
       , ("borderRadius", "5px 5px 0px 0px")
       ]
+      where
+        Rect x y w h = _wndRect
+        Point ox oy = fromMaybe origin _wndDragOffset
+
     header = style
       [ ("position", "absolute")
       , ("left", px 0)
@@ -133,18 +141,27 @@ window cmp startDrag l = stateL l $ \rs -> div
 
 shareable
   :: DragHandler st
-  -> Lens' st DraggableState
+  -> Lens' st (Maybe DraggableState)
   -> Lens' st [DroppedState]
   -> Props st
 shareable startDrag l lds = onMouseDown $ \e -> startDrag e
-  (\_ _ -> modify $ over l $ \st' -> st' { _ssDragged = True } )
-  (\x y -> modify $ over l $ \st' -> st' { _ssDragX = x, _ssDragY = y } )
-  $ do
-      st <- view l <$> get
-      modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
-      modify $ over l $ \st' -> st' { _ssDragged = False, _ssDragX = 0, _ssDragY = 0 }
+  dragStarted
+  dragDragging
+  dragDropped
+  where
+    dragStarted x y = modify $ over l $ \_ -> Just $ DraggableState
+      { _ssDragX = 0
+      , _ssDragY = 0
+      , _ssDraggedInstance = undefined
+      , _ssDroppedInstance = undefined
+      }
+    dragDragging x y = modify $ over (l % _Just) $ \st -> st { _ssDragX = x, _ssDragY = y }
+    dragDropped = do
+      mSt <- view l <$> get
+      whenJust mSt $ \st -> modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
+      modify $ set l Nothing
 
-song :: DragHandler st -> Lens' st DraggableState -> Lens' st [DroppedState] -> Component st
+song :: DragHandler st -> Lens' st (Maybe DraggableState) -> Lens' st [DroppedState] -> Component st
 song startDrag l lds = stateL l $ \st -> div []
   [ div [ css ]
       [ div
@@ -152,9 +169,9 @@ song startDrag l lds = stateL l $ \st -> div []
           , shareable startDrag l lds
           ] []
       ]
-  , if _ssDragged st
-      then div [ dragged st ] []
-      else div [] []
+  , case st of
+      Just st -> div [ dragged st ] []
+      Nothing -> div [] []
   ]
   where
     css = style
@@ -215,6 +232,7 @@ safeguard p l f = state $ \st -> case preview l st of
 data InstanceInfo st = forall sti. InstanceInfo (Lens' st sti) (Component st) (DraggableState -> sti -> sti)
 
 componentForInstance :: Instance -> Component A.Value
+componentForInstance InstanceRect = div [] []
 componentForInstance (InstanceTree p) = safeguard p (pathToLens p) (showTree 0)
 
 dropOnInstance :: DraggableState -> Instance -> A.Value -> A.Value

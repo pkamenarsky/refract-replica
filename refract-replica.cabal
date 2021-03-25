@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e18c0030d96311d07baeddb77eaccde69dfe556e183c7f5424693ecd77bbee8f
+-- hash: 44d307cb90de36b853a63006c367a11c051f3a0af404ef29078b07e1c7beb7f6
 
 name:           refract-replica
 version:        0.1.0.0
@@ -52,6 +52,7 @@ library
 executable refract-replica-exe
   main-is: Main.hs
   other-modules:
+      Types
       Paths_refract_replica
   hs-source-dirs:
       app

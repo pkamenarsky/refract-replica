@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Types where
@@ -32,7 +33,20 @@ unsafeIx x = toLens (error "unsafeIx") $ ix x
 tuple :: Lens' st a -> Lens' st b -> Lens' st (a, b)
 tuple x y = lens (\st -> (view x st, view y st)) (\st (a, b) -> set y b $ set x a st)
 
+whenJust :: Applicative m => Maybe a -> (a -> m ()) -> m ()
+whenJust Nothing _ = pure ()
+whenJust (Just a) f = f a
+
 -- Types -----------------------------------------------------------------------
+
+data Rect = Rect Int Int Int Int
+  deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
+data Point = Point { x :: Int, y :: Int }
+  deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
+origin :: Point
+origin = Point 0 0
 
 data NodeState = NodeState
   { _nodeOpen :: Bool
@@ -49,25 +63,15 @@ defaultNodeState = NodeState False "/root"
   , NodeState False "/etc" []
   ]
 
-data WindowState w = WindowState
-  { _positionX :: Int
-  , _positionY :: Int
-  , _width :: Int
-  , _height :: Int
-  , _dragX :: Int
-  , _dragY :: Int
-  , _windowState :: w
+data WindowState = WindowState
+  { _wndRect :: Rect
+  , _wndDragOffset :: Maybe Point
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
-defaultWindowState :: WindowState ()
+defaultWindowState :: WindowState
 defaultWindowState = WindowState
-  { _positionX = 100
-  , _positionY = 100
-  , _width = 200
-  , _height = 200
-  , _dragX = 0
-  , _dragY = 0
-  , _windowState = ()
+  { _wndRect = Rect 100 100 200 200
+  , _wndDragOffset = Nothing
   }
 
 data DroppedState = DroppedState
@@ -76,22 +80,17 @@ data DroppedState = DroppedState
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 data DraggableState = DraggableState
-  { _ssDragged :: Bool
-  , _ssDragX :: Int
+  { _ssDragX :: Int
   , _ssDragY :: Int
+  , _ssDraggedInstance :: Instance
+  , _ssDroppedInstance :: Instance
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-defaultDraggableState :: DraggableState
-defaultDraggableState = DraggableState
-  { _ssDragged = False
-  , _ssDragX = 0
-  , _ssDragY = 0
-  }
 
 data State = State
   { _root :: NodeState
-  , _windowStates :: [WindowState ()]
-  , _draggableState :: DraggableState
+  , _windowStates :: [WindowState]
+  , _draggableState :: Maybe DraggableState
+  , _draggableInstance :: Maybe InstanceState
   , _droppedState :: [DroppedState]
   , _instances :: [Instance]
   , _global :: A.Value
@@ -105,17 +104,30 @@ globalState = A.object
 defaultState = State
   { _root = defaultNodeState
   , _windowStates = [defaultWindowState, defaultWindowState]
-  , _draggableState = defaultDraggableState
+  , _draggableState = Nothing
+  , _draggableInstance = Nothing
   , _droppedState = []
-  , _instances = [ InstanceTree [Key "files"], InstanceTree [Key "files"] ]
+  , _instances = [] -- [ InstanceTree [Key "files"], InstanceTree [Key "files"] ]
   , _global = globalState
   }
 
 data SongState = SongState deriving (Show, Generic, A.FromJSON, A.ToJSON)
 data PlaylistState = PlaylistState deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
+data InstanceState = InstanceState
+  { _instWindowState :: WindowState
+  , _instInstance :: Instance
+  } deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+defaultInstanceState :: InstanceState
+defaultInstanceState = InstanceState
+  { _instWindowState = defaultWindowState
+  , _instInstance = InstanceRect
+  }
+
 data Instance
-  = InstanceTree Path
+  = InstanceRect
+  | InstanceTree Path
   | InstanceSong Path
   | InstancePlaylist [Path]
   deriving (Show, Generic, A.FromJSON, A.ToJSON)
@@ -134,6 +146,8 @@ pathToLens (Index i:ps) = A.nth i % pathToLens ps
 
 -- TH --------------------------------------------------------------------------
 
+makeLenses ''Rect
+makeLenses ''Point
 makeLenses ''DroppedState
 makeLenses ''WindowState
 makeLenses ''NodeState
