@@ -48,6 +48,20 @@ data Point = Point { _pointX :: Int, _pointY :: Int }
 origin :: Point
 origin = Point 0 0
 
+data PathSegment
+  = Key Text
+  | Index Int
+  deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+type Path = [PathSegment]
+
+pathToLens :: A.ToJSON a => A.FromJSON a => Path -> AffineTraversal' A.Value a
+pathToLens [] = castOptic A._JSON
+pathToLens (Key k:ps) = A.key k % pathToLens ps
+pathToLens (Index i:ps) = A.nth i % pathToLens ps
+
+--------------------------------------------------------------------------------
+
 data NodeValue
   = NodeString Text
   | NodeNumber Double
@@ -82,43 +96,19 @@ defaultWindowState = WindowState
   , _wndTitleBar = True 
   }
 
-data DroppedState = DroppedState
-  { _dsX :: Int
-  , _dsY :: Int
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-data DraggableState = DraggableState
-  { _ssDragX :: Int
-  , _ssDragY :: Int
-  , _ssDraggedInstance :: Instance
-  , _ssDroppedInstance :: Instance
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-data State = State
-  { _nodeState :: NodeState
-  , _windowStates :: [WindowState]
-  , _draggedInstance :: Maybe InstanceState
-  , _droppedState :: [DroppedState]
-  , _instances :: [Instance]
-  , _global :: A.Value
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-globalState :: A.Value
-globalState = A.object
-  [ "files" A..= A.toJSON defaultNodeState
-  ]
-
-defaultState = State
-  { _nodeState = defaultNodeState
-  , _windowStates = [defaultWindowState, defaultWindowState]
-  , _draggedInstance = Nothing
-  , _droppedState = []
-  , _instances = [] -- [ InstanceTree [Key "files"], InstanceTree [Key "files"] ]
-  , _global = globalState
-  }
-
 data SongState = SongState deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+defaultSongState :: SongState
+defaultSongState = SongState
+
 data PlaylistState = PlaylistState deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+data Instance
+  = InstanceRect
+  | InstanceTree Path
+  | InstanceSong Path
+  | InstancePlaylist [Path]
+  deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 data InstanceState = InstanceState
   { _instWindowState :: WindowState
@@ -131,34 +121,35 @@ defaultInstanceState = InstanceState
   , _instInstance = InstanceRect
   }
 
-data Instance
-  = InstanceRect
-  | InstanceTree Path
-  | InstanceSong Path
-  | InstancePlaylist [Path]
-  deriving (Show, Generic, A.FromJSON, A.ToJSON)
+data State = State
+  { _draggedInstance :: Maybe InstanceState
+  , _instances :: [InstanceState]
+  , _global :: A.Value
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
-data PathSegment
-  = Key Text
-  | Index Int
-  deriving (Show, Generic, A.FromJSON, A.ToJSON)
+globalState :: A.Value
+globalState = A.object
+  [ "files" A..= defaultNodeState
+  , "song" A..= defaultSongState
+  ]
 
-type Path = [PathSegment]
-
-pathToLens :: A.ToJSON a => A.FromJSON a => Path -> AffineTraversal' A.Value a
-pathToLens [] = castOptic A._JSON
-pathToLens (Key k:ps) = A.key k % pathToLens ps
-pathToLens (Index i:ps) = A.nth i % pathToLens ps
+defaultState = State
+  { _draggedInstance = Nothing
+  , _instances =
+    [ InstanceState defaultWindowState (InstanceTree [Key "files"])
+    , InstanceState defaultWindowState (InstanceTree [Key "files"])
+    , InstanceState defaultWindowState (InstanceSong [Key "song"])
+    ]
+  , _global = globalState
+  }
 
 -- TH --------------------------------------------------------------------------
 
 makeLenses ''Rect
 makeLenses ''Point
-makeLenses ''DroppedState
 makeLenses ''WindowState
 makePrisms ''NodeValue
 makeLenses ''NodeState
-makeLenses ''DraggableState
 makeLenses ''Instance
 makeLenses ''InstanceState
 makeLenses ''State

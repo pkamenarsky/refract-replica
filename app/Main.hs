@@ -64,39 +64,49 @@ px x = pack (show x) <> "px"
 onTrackedDragEnd :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onTrackedDragEnd = onMouseUp
 
--- Tree ------------------------------------------------------------------------
-
-showTree :: Maybe InstanceState -> Lens' st NodeState -> Component st
-showTree draggedInst l = div
-  [ onTrackedDragEnd $ \e -> case draggedInst of
-      Just inst -> modify $ set l $ NodeState True "RECT" (NodeArray [])
-      Nothing -> pure ()
-  ]
-  [ go 0 l ]
+oneOrWarning :: Path -> AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
+oneOrWarning p l f = state $ \st -> case preview l st of
+  Nothing -> div [ frame ] []
+  Just _ -> f (toLens (error "defaultComponent") l)
   where
-    go :: Int -> Lens' st NodeState -> Component st
-    go level l = stateL l $ \NodeState {..} -> div [ frame ] $ mconcat
-      [ [ span
-            [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
-            [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
-        ]
-    
-      , if _nodeOpen
-          then case _nodeChildren of
-            NodeArray children -> 
-              [ go (level + 1) (toLens (error "showTree") $ l % nodeChildren % _NodeArray % ix i)
-              | (i, _) <- zip [0..] children
-              ]  
-            _ -> []
-          else []
+    frame = style
+      [ ("position", "absolute")
+      , ("left", px 0) -- TODO
+      , ("top", px 0)
+      , ("width", px 50)
+      , ("height", px 50)
+      , ("backgroundColor", "#f00")
       ]
-      where
-        frame = style
-          [ ("paddingLeft", pack (show $ level * 12) <> "px")
-          , ("fontFamily", "Helvetica")
-          , ("fontSize", "14px")
-          , ("lineHeight", "18px")
-          ]
+
+oneOrEmpty :: AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
+oneOrEmpty l f = state $ \st -> case preview l st of
+  Nothing -> empty
+  Just _ -> f (toLens (error "defaultComponent") l)
+
+-- Shareable -------------------------------------------------------------------
+
+shareable
+  :: StartDrag st
+  -> IO Bounds
+  -> Instance
+  -> Lens' st (Maybe InstanceState)
+  -> Props st
+shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dragStarted dragDragging dragDropped
+  where
+    dragStarted x y = do
+      (x, y, w, h) <- liftIO getParentBounds
+
+      modify $ set l $ Just $ InstanceState
+        { _instWindowState = WindowState
+            { _wndRect = Rect (round x) (round y) (round w) (round h)
+            , _wndDragOffset = Just origin
+            , _wndTitleBar = False
+            }
+        , _instInstance = inst
+        }
+    dragDragging x y = modify $ set (l % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
+    dragDropped = modify $ set l Nothing
+
 
 -- Window  ---------------------------------------------------------------------
 
@@ -156,107 +166,19 @@ window cmp startDrag l = stateL l $ \ws -> div
       , ("overflow", "auto")
       ]
 
--- Song ------------------------------------------------------------------------
+-- Instances -------------------------------------------------------------------
 
-shareable
-  :: StartDrag st
-  -> IO Bounds
-  -> Instance
+windowForInstance
+  :: GetBounds
+  -> StartDrag st
   -> Lens' st (Maybe InstanceState)
-  -> Props st
-shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dragStarted dragDragging dragDropped
-  where
-    dragStarted x y = do
-      (x, y, w, h) <- liftIO getParentBounds
-
-      modify $ set l $ Just $ InstanceState
-        { _instWindowState = WindowState
-            { _wndRect = Rect (round x) (round y) (round w) (round h)
-            , _wndDragOffset = Just origin
-            , _wndTitleBar = False
-            }
-        , _instInstance = inst
-        }
-    dragDragging x y = modify $ set (l % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
-    dragDropped = do
-      -- mSt <- view l <$> get
-      -- whenJust mSt $ \st -> modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
-      modify $ set l Nothing
-
-song :: GetBounds -> StartDrag st -> Lens' st (Maybe InstanceState) -> Component st
-song getBounds startDrag l = stateL l $ \st -> div []
-  [ domPath $ \path -> div [ frame ]
-      [ div
-          [ dragHandle
-          , shareable startDrag (getBounds path) InstanceRect l
-          ] []
-      ]
-  ]
-  where
-    frame = style
-      [ ("position", "absolute")
-      , ("left", px 300)
-      , ("top", px 300)
-      , ("width", px 200)
-      , ("height", px 50)
-      , ("border", "1px solid #333")
-      ]
-
-    dragHandle = style
-      [ ("position", "absolute")
-      , ("top", px 8)
-      , ("right", px 8)
-      , ("width", px 8)
-      , ("height", px 8)
-      , ("backgroundColor", "#333")
-      ]
-
-    dragged DraggableState {..} = style
-      [ ("position", "absolute")
-      , ("left", px (300 + _ssDragX))
-      , ("top", px (300 + _ssDragY))
-      , ("width", px 200)
-      , ("height", px 50)
-      , ("backgroundColor", "#333")
-      ]
-
-dropped :: Lens' st DroppedState -> Component st
-dropped l = stateL l $ \st ->div [ frame st ] []
-  where
-    frame DroppedState {..} = style
-      [ ("position", "absolute")
-      , ("left", px _dsX)
-      , ("top", px _dsY)
-      , ("width", px 50)
-      , ("height", px 50)
-      , ("backgroundColor", "#333")
-      ]
-
---------------------------------------------------------------------------------
-
-oneOrWarning :: Path -> AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
-oneOrWarning p l f = state $ \st -> case preview l st of
-  Nothing -> div [ frame ] []
-  Just _ -> f (toLens (error "defaultComponent") l)
-  where
-    frame = style
-      [ ("position", "absolute")
-      , ("left", px 0) -- TODO
-      , ("top", px 0)
-      , ("width", px 50)
-      , ("height", px 50)
-      , ("backgroundColor", "#f00")
-      ]
-
-oneOrEmpty :: AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
-oneOrEmpty l f = state $ \st -> case preview l st of
-  Nothing -> empty
-  Just _ -> f (toLens (error "defaultComponent") l)
-
-windowForInstance :: Maybe InstanceState -> StartDrag st -> Lens' st A.Value -> Lens' st InstanceState -> Component st
-windowForInstance draggedInst startDrag lv lis = wrap $ stateL lis $ \st -> case _instInstance st of
+  -> Lens' st A.Value
+  -> Lens' st InstanceState
+  -> Component st
+windowForInstance getBounds startDrag ld lv lis = wrap $ stateL ld $ \draggedInst -> stateL lis $ \st -> case _instInstance st of
   InstanceRect -> div [ fill ] []
   InstanceTree p-> oneOrWarning p (lv % pathToLens p) (showTree draggedInst)
+  InstanceSong p-> oneOrWarning p (lv % pathToLens p) (song getBounds startDrag ld)
   where
     wrap cmp = window cmp startDrag (lis % instWindowState)
 
@@ -269,15 +191,74 @@ windowForInstance draggedInst startDrag lv lis = wrap $ stateL lis $ \st -> case
       , ("backgroundColor", "#f00")
       ]
 
-dropOnInstance :: DraggableState -> Instance -> A.Value -> A.Value
-dropOnInstance st (InstanceTree p) = over (pathToLens p) dropOnTree
+-- Tree ------------------------------------------------------------------------
+
+showTree :: Maybe InstanceState -> Lens' st NodeState -> Component st
+showTree draggedInst l = div
+  [ onTrackedDragEnd $ \e -> case draggedInst of
+      Just inst -> modify $ set l $ NodeState True "RECT" (NodeArray [])
+      Nothing -> pure ()
+  ]
+  [ go 0 l ]
   where
-    dropOnTree :: NodeState -> NodeState
-    dropOnTree = undefined
-dropOnInstance st (InstanceSong p) = over (pathToLens p) dropOnSong
+    go :: Int -> Lens' st NodeState -> Component st
+    go level l = stateL l $ \NodeState {..} -> div [ frame ] $ mconcat
+      [ [ span
+            [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
+            [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
+        ]
+    
+      , if _nodeOpen
+          then case _nodeChildren of
+            NodeArray children -> 
+              [ go (level + 1) (toLens (error "showTree") $ l % nodeChildren % _NodeArray % ix i)
+              | (i, _) <- zip [0..] children
+              ]  
+            _ -> []
+          else []
+      ]
+      where
+        frame = style
+          [ ("paddingLeft", pack (show $ level * 12) <> "px")
+          , ("fontFamily", "Helvetica")
+          , ("fontSize", "14px")
+          , ("lineHeight", "18px")
+          ]
+
+
+-- Song ------------------------------------------------------------------------
+
+song
+  :: GetBounds
+  -> StartDrag st
+  -> Lens' st (Maybe InstanceState)
+  -> Lens' st SongState
+  -> Component st
+song getBounds startDrag ld l = div []
+  [ domPath $ \path -> div [ frame ]
+      [ div
+          [ dragHandle
+          , shareable startDrag (getBounds path) InstanceRect ld
+          ] []
+      ]
+  ]
   where
-    dropOnSong :: SongState -> SongState
-    dropOnSong = undefined
+    frame = style
+      [ ("position", "absolute")
+      , ("left", px 0)
+      , ("top", px 0)
+      , ("right", px 0)
+      , ("bottom", px 0)
+      ]
+
+    dragHandle = style
+      [ ("position", "absolute")
+      , ("top", px 8)
+      , ("right", px 8)
+      , ("width", px 8)
+      , ("height", px 8)
+      , ("backgroundColor", "#333")
+      ]
 
 -- OS --------------------------------------------------------------------------
 
@@ -287,19 +268,16 @@ main = do
     let drag = startDrag ctx ddChan
         bounds = getBounds ctx
       in state $ \st -> div [ frame ] $ mconcat
-        [ [ text (pack $ show st) ]
-        , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
-        , [ window (showTree (_draggedInstance st) nodeState) drag (windowStates % unsafeIx i)
-          | (i, _) <- zip [0..] (_windowStates st)
+        [ [ div [ style [ ("userSelect", "none") ] ] [ text (pack $ show st) ] ]
+        -- , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
+
+        -- Instances
+        , [ windowForInstance bounds drag draggedInstance global (instances % unsafeIx i)
+          | (i, _) <- zip [0..] (_instances st)
           ]
-        , [ song bounds drag draggedInstance ]
-        , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance (_draggedInstance st) drag global ]
-        -- , [ dropped (droppedState % unsafeIx  i)
-        --   | (i, _) <- zip [0..] (_droppedState st)
-        --   ]
-        -- , [ zoom global $ componentForInstance inst
-        --   | inst <- _instances st
-        --   ]
+
+        -- Dragged instance
+        , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance bounds drag draggedInstance global ]
         ]
   where
     frame = style
