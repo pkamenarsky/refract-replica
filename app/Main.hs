@@ -97,8 +97,8 @@ window cmp startDrag l = stateL l $ \ws -> div
   , div [ content ] [ cmp ]
   ]
   where
-    dragStarted _ _ = modify $ set (l % wndDragOffset % _Just) $ Point 0 0
-    dragDragging x y = modify $ set (l % wndDragOffset % _Just) $ Point x y
+    dragStarted _ _ = modify $ set (l % wndDragOffset % _Just) origin
+    dragDragging x y = modify $ set (l % wndDragOffset % _Just) (Point x y)
     dragDropped = modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
       { _wndRect = case offset of
           Just (Point ox oy) -> Rect (x + ox) (y + oy) w h
@@ -141,39 +141,37 @@ window cmp startDrag l = stateL l $ \ws -> div
 
 -- Song ------------------------------------------------------------------------
 
-shareable'
+shareable
   :: DragHandler st
-  -> Lens' st (Maybe DraggableState)
-  -> Lens' st [DroppedState]
+  -> WindowState
+  -> Instance
+  -> Lens' st (Maybe InstanceState)
   -> Props st
-shareable' startDrag l lds = onMouseDown $ \e -> startDrag e
+shareable startDrag wndState inst l = onMouseDown $ \e -> startDrag e
   dragStarted
   dragDragging
   dragDropped
   where
-    dragStarted x y = modify $ over l $ \_ -> Just $ DraggableState
-      { _ssDragX = 0
-      , _ssDragY = 0
-      , _ssDraggedInstance = undefined
-      , _ssDroppedInstance = undefined
+    dragStarted x y = modify $ set l $ Just $ InstanceState
+      { _instWindowState = wndState
+          { _wndDragOffset = Just origin
+          }
+      , _instInstance = inst
       }
-    dragDragging x y = modify $ over (l % _Just) $ \st -> st { _ssDragX = x, _ssDragY = y }
+    dragDragging x y = modify $ set (l % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
     dragDropped = do
-      mSt <- view l <$> get
-      whenJust mSt $ \st -> modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
+      -- mSt <- view l <$> get
+      -- whenJust mSt $ \st -> modify $ over lds $ \st' -> DroppedState { _dsX = 300 + _ssDragX st, _dsY = 300 + _ssDragY st }:st'
       modify $ set l Nothing
 
-song :: DragHandler st -> Lens' st (Maybe DraggableState) -> Lens' st [DroppedState] -> Component st
-song startDrag l lds = stateL l $ \st -> div []
+song :: DragHandler st -> Lens' st (Maybe InstanceState) -> Component st
+song startDrag l = stateL l $ \st -> div []
   [ div [ frame ]
       [ div
           [ style dragHandle
-          , shareable' startDrag l lds
+          , shareable startDrag undefined undefined l
           ] []
       ]
-  , case st of
-      Just st -> div [ dragged st ] []
-      Nothing -> div [] []
   ]
   where
     frame = style
@@ -258,7 +256,7 @@ main = do
         , [ window (showTree 0 nodeState) drag (windowStates % unsafeIx  i)
           | (i, _) <- zip [0..] (_windowStates st)
           ]
-        , [ song drag draggableState droppedState ]
+        , [ song drag draggableInstance ]
         , [ dropped (droppedState % unsafeIx  i)
           | (i, _) <- zip [0..] (_droppedState st)
           ]
