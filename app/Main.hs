@@ -343,10 +343,11 @@ defaultState = State
 
 main :: IO ()
 main = do
-  runDefault 3777 "Tree" storeState readStore (pure <$> newTChanIO) $ \ctx [ddChan] -> do
-    pure $ let drag = startDrag ctx ddChan in state $ \st ->
-      div [] $ mconcat
+  runDefault 3777 "Tree" storeState readStore (pure <$> newTChanIO) $ \ctx [ddChan] ->
+    let drag = startDrag ctx ddChan in state $ \st ->
+      div [ css ] $ mconcat
         [ [ text (pack $ show st) ]
+        , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
         , [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
           | (i, _) <- zip [0..] (_windowStates st)
           ]
@@ -359,6 +360,14 @@ main = do
           ]
         ]
   where
+    css = style
+      [ ("backgroundColor", "#bbb")
+      , ("width", "100%")
+      , ("height", "1000px")
+      , ("margin", px 0)
+      , ("padding", px 0)
+      ]
+
     storeState st = Store.writeStore (Store.Store 0) $ A.encode st
 
     readStore = fromMaybe defaultState <$> do
