@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 309f67c94159fbec306327fe76af6e9ef030c5772f142ef61a199a8b576c6d62
+-- hash: e18c0030d96311d07baeddb77eaccde69dfe556e183c7f5424693ecd77bbee8f
 
 name:           refract-replica
 version:        0.1.0.0
@@ -39,13 +39,10 @@ library
       aeson
     , base >=4.7 && <5
     , containers
-    , foreign-store
     , replica
     , stm
     , text
     , transformers
-    , unordered-containers
-    , vector
     , wai
     , wai-websockets
     , warp
@@ -61,7 +58,9 @@ executable refract-replica-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
+    , aeson-optics
     , base >=4.7 && <5
+    , bytestring
     , containers
     , foreign-store
     , optics
@@ -90,14 +89,11 @@ test-suite refract-replica-test
       aeson
     , base >=4.7 && <5
     , containers
-    , foreign-store
     , refract-replica
     , replica
     , stm
     , text
     , transformers
-    , unordered-containers
-    , vector
     , wai
     , wai-websockets
     , warp

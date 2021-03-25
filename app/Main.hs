@@ -18,8 +18,11 @@ import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
+import qualified Data.Aeson.Optics as A
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as H
 import Data.Text (Text, pack)
+import Data.Text.Encoding (decodeUtf8)
 import Data.Tuple.Optics
 import Data.Maybe (fromMaybe)
 import Data.Maybe.Optics
@@ -50,6 +53,9 @@ import Prelude hiding (div, span)
 
 stateL :: Lens' st a -> (a -> Component st) -> Component st
 stateL l f = state $ \st -> f (view l st)
+
+zoom :: Lens' st a -> Component a -> Component st
+zoom l cmp = Component $ \setState st -> runComponent cmp (\a -> setState (set l a st)) (view l st)
 
 toLens :: b -> AffineTraversal' a b -> Lens' a b
 toLens d t = lens (fromMaybe d . preview t) (\a b -> set t b a)
@@ -265,54 +271,47 @@ dropped l = stateL l $ \st ->div [ css st ] []
 data SongState = SongState deriving (Show, Generic, A.FromJSON, A.ToJSON)
 data PlaylistState = PlaylistState deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
-data InstanceType st where
-  InstanceTree :: InstanceType NodeState
-  InstanceSong :: InstanceType SongState
-  InstancePlaylist :: InstanceType PlaylistState
+data Instance
+  = InstanceTree Path
+  | InstanceSong Path
+  | InstancePlaylist [Path]
+  deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
-instance A.ToJSON (InstanceType st) where
-  toJSON InstanceTree = A.String "tree"
-  toJSON InstanceSong = A.String "song"
-  toJSON InstancePlaylist = A.String "playlist"
+data PathSegment
+  = Key Text
+  | Index Int
+  deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
-data PathSegment = Key Text | Index Int deriving (Show, Generic, A.FromJSON, A.ToJSON)
 type Path = [PathSegment]
 
-keyLens :: Text -> Lens' A.Value A.Value
-keyLens = undefined
+pathToLens :: A.ToJSON a => A.FromJSON a => Path -> AffineTraversal' A.Value a
+pathToLens [] = castOptic A._JSON
+pathToLens (Key k:ps) = A.key k % pathToLens ps
+pathToLens (Index i:ps) = A.nth i % pathToLens ps
 
-indexLens :: Int -> Lens' A.Value A.Value
-indexLens = undefined
-
-pathToLens :: A.FromJSON a => Path -> Lens' A.Value a
-pathToLens path = lens (get path) undefined
+safeguard :: Path -> AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
+safeguard p l f = state $ \st -> case preview l st of
+  Nothing -> div [ css ] []
+  Just _ -> f (toLens (error "defaultComponent") l)
   where
-    pathLens (Key k:ps) = keyLens k % pathLens ps
-    pathLens (Index i:ps) = indexLens i % pathLens ps
-
-    get [] o
-      | A.Success v <- A.fromJSON o = v
-      | otherwise = error "pathToLens"
-    get (Key k:ps) (A.Object o)
-      | Just v <- H.lookup k o = get ps v
-    get (Index i:ps) (A.Array a)
-      | Just v <- a V.!? i = get ps v
-    get _ _ = error "pathToLens"
-
-data Instance = forall sti. (A.FromJSON sti, A.ToJSON sti) => Instance (InstanceType sti) Path
-
-instance A.FromJSON Instance where
-  parseJSON (A.Object o) = do
-    A.String t <- o A..: "type"
-    p <- o A..: "path"
-
-    case t of
-      "tree" -> pure $ Instance InstanceTree p
-      "song" -> pure $ Instance InstanceSong p
-      "playlist" -> pure $ Instance InstancePlaylist p
+    css = style
+      [ ("position", "absolute")
+      , ("left", px 0) -- TODO
+      , ("top", px 0)
+      , ("width", px 50)
+      , ("height", px 50)
+      , ("backgroundColor", "#f00")
+      ]
 
 componentForInstance :: Instance -> Component A.Value
-componentForInstance (Instance t@InstanceTree p) = showTree 0 (pathToLens p)
+componentForInstance (InstanceTree p) = safeguard p (pathToLens p) (showTree 0)
+
+globalState :: A.Value
+globalState = A.object
+  [ "files" A..= A.toJSON defaultNodeState
+  ]
+
+--------------------------------------------------------------------------------
 
 data WindowType st w where
   Folder :: WindowType st [Component st]
@@ -327,6 +326,8 @@ data State = State
   , _windowStates :: [WindowState ()]
   , _draggableState :: DraggableState
   , _droppedState :: [DroppedState]
+  , _instances :: [Instance]
+  , _global :: A.Value
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 makeLenses ''State
@@ -336,6 +337,8 @@ defaultState = State
   , _windowStates = [defaultWindowState, defaultWindowState]
   , _draggableState = defaultDraggableState
   , _droppedState = []
+  , _instances = [ InstanceTree [Key "files"] ]
+  , _global = globalState
   }
 
 main :: IO ()
@@ -343,13 +346,16 @@ main = do
   runDefault 3777 "Tree" storeState readStore (pure <$> newTChanIO) $ \ctx [ddChan] -> do
     pure $ let drag = startDrag ctx ddChan in state $ \st ->
       div [] $ mconcat
-        [ -- [ text (pack $ show st) ]
-          [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
+        [ [ text (pack $ show st) ]
+        , [ window (showTree 0 root) drag (windowStates % unsafeIx  i)
           | (i, _) <- zip [0..] (_windowStates st)
           ]
         , [ song drag draggableState droppedState ]
         , [ dropped (droppedState % unsafeIx  i)
           | (i, _) <- zip [0..] (_droppedState st)
+          ]
+        , [ zoom global $ componentForInstance inst
+          | inst <- _instances st
           ]
         ]
   where
