@@ -48,30 +48,38 @@ data Point = Point { _pointX :: Int, _pointY :: Int }
 origin :: Point
 origin = Point 0 0
 
+data NodeValue
+  = NodeString Text
+  | NodeNumber Double
+  | NodeArray [NodeState]
+  deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
 data NodeState = NodeState
   { _nodeOpen :: Bool
   , _nodeName :: Text
-  , _nodeChildren :: [NodeState]
+  , _nodeChildren :: NodeValue
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 defaultNodeState :: NodeState
-defaultNodeState = NodeState False "/root"
-  [ NodeState False "/home"
-      [ NodeState False "/phil" []
-      , NodeState False "/satan" []
+defaultNodeState = NodeState False "/root" $ NodeArray
+  [ NodeState False "/home" $ NodeArray
+      [ NodeState False "/phil" (NodeString "666")
+      , NodeState False "/satan" (NodeString "666")
       ]
-  , NodeState False "/etc" []
+  , NodeState False "/etc" $ NodeArray []
   ]
 
 data WindowState = WindowState
   { _wndRect :: Rect
   , _wndDragOffset :: Maybe Point
+  , _wndTitleBar :: Bool
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 defaultWindowState :: WindowState
 defaultWindowState = WindowState
   { _wndRect = Rect 100 100 200 200
   , _wndDragOffset = Nothing
+  , _wndTitleBar = True 
   }
 
 data DroppedState = DroppedState
@@ -89,8 +97,7 @@ data DraggableState = DraggableState
 data State = State
   { _nodeState :: NodeState
   , _windowStates :: [WindowState]
-  , _draggableState :: Maybe DraggableState
-  , _draggableInstance :: Maybe InstanceState
+  , _draggedInstance :: Maybe InstanceState
   , _droppedState :: [DroppedState]
   , _instances :: [Instance]
   , _global :: A.Value
@@ -104,8 +111,7 @@ globalState = A.object
 defaultState = State
   { _nodeState = defaultNodeState
   , _windowStates = [defaultWindowState, defaultWindowState]
-  , _draggableState = Nothing
-  , _draggableInstance = Nothing
+  , _draggedInstance = Nothing
   , _droppedState = []
   , _instances = [] -- [ InstanceTree [Key "files"], InstanceTree [Key "files"] ]
   , _global = globalState
@@ -150,6 +156,7 @@ makeLenses ''Rect
 makeLenses ''Point
 makeLenses ''DroppedState
 makeLenses ''WindowState
+makePrisms ''NodeValue
 makeLenses ''NodeState
 makeLenses ''DraggableState
 makeLenses ''Instance
