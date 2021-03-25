@@ -10,20 +10,25 @@ import qualified Data.Text as T
 import Refract.DOM.Props (Props(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
 import qualified Replica.VDOM as VDOM
 
-newtype Component st = Component { runComponent :: (st -> IO ()) -> st -> VDOM.HTML }
+type DomPath = [Int]
+
+newtype Component st = Component { runComponent :: DomPath -> (st -> IO ()) -> st -> VDOM.HTML }
+
+domPath :: (DomPath -> Component st) -> Component st
+domPath f = Component $ \path setState st -> runComponent (f path) path setState st
 
 el :: T.Text -> [Props st] -> [Component st] -> Component st
 el = elWithNamespace Nothing
 
 elWithNamespace :: Maybe VDOM.Namespace -> T.Text -> [Props st] -> [Component st] -> Component st
-elWithNamespace ns name props children = Component $ \setState st ->
+elWithNamespace ns name props children = Component $ \path setState st ->
   [ VDOM.VNode
       name
       (M.unions $ map (toProps setState st) props)
       ns
       $ mconcat
-          [ runComponent child setState st
-          | child <- children
+          [ runComponent child (i:path) setState st
+          | (i, child) <- zip [0..] children
           ]
   ]
   where
@@ -33,7 +38,7 @@ elWithNamespace ns name props children = Component $ \setState st ->
     toProps setState st (Props k (PropMap m)) = M.singleton k $ VDOM.AMap $ M.unions $ map (toProps setState st) m
  
 text :: T.Text -> Component st
-text txt = Component $ \_ _ -> [VDOM.VText txt]
+text txt = Component $ \_ _ _ -> [VDOM.VText txt]
 
 -- | https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div
 div :: [Props st] -> [Component st] -> Component st

@@ -215,7 +215,7 @@ onDrag f = Props "onDrag" (PropEvent (f . extractResult . A.fromJSON . getDOMEve
 --------------------------------------------------------------------------------
 
 data DragState = DragStarted Int Int | DragDragged Int Int | DragNone
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Show)
 
 dragAndDrop :: R.Context -> (DragState -> IO ()) -> MouseEvent -> IO ()
 dragAndDrop ctx cb event = do
@@ -247,7 +247,7 @@ dragAndDrop ctx cb event = do
       (x - mouseClientX event)
       (y - mouseClientY event)
 
-type DragHandler st = 
+type StartDrag st = 
      MouseEvent
   -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragStarted
   -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
@@ -257,7 +257,7 @@ type DragHandler st =
 startDrag
   :: R.Context
   -> TChan (st -> IO st) -- ^ setState
-  -> DragHandler st
+  -> StartDrag st
 startDrag ctx modStCh mouseEvent started dragged finished
   = liftIO $ dragAndDrop ctx writeState mouseEvent
   where
