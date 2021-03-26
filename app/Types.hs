@@ -8,6 +8,8 @@ module Types where
 
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Optics as A
+import qualified Data.HashMap.Strict as H
+import qualified Data.Vector as V
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 
@@ -65,23 +67,48 @@ pathToLens (Index i:ps) = A.nth i % pathToLens ps
 data NodeValue
   = NodeString Text
   | NodeNumber Double
-  | NodeArray [NodeState]
+  | NodeArray Bool [NodeState]
+  | NodeBool Bool
   deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 data NodeState = NodeState
-  { _nodeOpen :: Bool
-  , _nodeName :: Text
+  { _nodeName :: Text
+  , _nodeMouseOver :: Bool
   , _nodeChildren :: NodeValue
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 defaultNodeState :: NodeState
-defaultNodeState = NodeState False "/root" $ NodeArray
-  [ NodeState False "/home" $ NodeArray
-      [ NodeState False "/phil" (NodeString "666")
-      , NodeState False "/satan" (NodeString "666")
+defaultNodeState = NodeState "root" False $ NodeArray False
+  [ NodeState "home" False $ NodeArray False
+      [ NodeState "phil" False (NodeString "666")
+      , NodeState "satan" False (NodeString "666")
       ]
-  , NodeState False "/etc" $ NodeArray []
+  , NodeState "etc" False $ NodeArray False []
   ]
+
+jsonToNodeState :: Text -> A.Value -> NodeState -> NodeState
+jsonToNodeState nn (A.Object m) (NodeState _ mo (NodeArray o children)) = NodeState nn mo $ NodeArray o
+  [ jsonToNodeState k v $ fromMaybe (NodeState k False (NodeArray False [])) (H.lookup k chm)
+  | (k, v) <- H.toList m
+  ]
+  where
+    chm = H.fromList [ (k, v) | v@(NodeState k _ _) <- children ]
+jsonToNodeState nn v@(A.Object m) _ = jsonToNodeState nn v (NodeState nn False (NodeArray False []))
+
+jsonToNodeState nn (A.Array a) (NodeState _ mo (NodeArray o children)) = NodeState nn mo $ NodeArray o
+  [ jsonToNodeState (pack $ show i) v $ fromMaybe (NodeState (pack $ show i) False (NodeArray False [])) ch
+  | ((i, v), ch) <- zip (zip [0..] (V.toList a)) (map Just children <> repeat Nothing)
+  ]
+jsonToNodeState nn v@(A.Array m) _ = jsonToNodeState nn v (NodeState nn False (NodeArray False []))
+
+jsonToNodeState nn (A.String s) (NodeState _ mo (NodeString t)) = NodeState nn mo (NodeString s)
+jsonToNodeState nn (A.String s) _ = NodeState nn False (NodeString s)
+jsonToNodeState nn (A.Number s) (NodeState _ mo (NodeString t)) = NodeState nn mo (NodeNumber $ fromRational $ toRational s)
+jsonToNodeState nn (A.Number s) _ = NodeState nn False (NodeNumber $ fromRational $ toRational s)
+jsonToNodeState nn (A.Bool s) (NodeState _ mo (NodeString t)) = NodeState nn mo (NodeBool s)
+jsonToNodeState nn (A.Bool s) _ = NodeState nn False (NodeBool s)
+jsonToNodeState nn A.Null (NodeState _ mo (NodeString t)) = NodeState nn mo (NodeString "null")
+jsonToNodeState nn A.Null _ = NodeState nn False (NodeString "null")
 
 data WindowState = WindowState
   { _wndRect :: Rect
@@ -91,7 +118,7 @@ data WindowState = WindowState
 
 defaultWindowState :: WindowState
 defaultWindowState = WindowState
-  { _wndRect = Rect 100 100 200 200
+  { _wndRect = Rect 100 100 500 500
   , _wndDragOffset = Nothing
   , _wndTitleBar = True 
   }
@@ -129,7 +156,7 @@ data State = State
 
 globalState :: A.Value
 globalState = A.object
-  [ "files" A..= defaultNodeState
+  [ "files" A..= jsonToNodeState "root" (A.toJSON defaultNodeState) (NodeState "" False (NodeArray False []))
   , "song" A..= defaultSongState
   ]
 

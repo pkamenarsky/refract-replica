@@ -20,10 +20,11 @@ import qualified Data.Aeson.Types as A
 import qualified Data.Aeson.Optics as A
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as H
+import qualified Data.HashSet as HS
 import Data.Text (Text, pack)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Tuple.Optics
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Maybe.Optics
 import qualified Data.Vector as V
 
@@ -195,7 +196,7 @@ windowForInstance getBounds startDrag ld lv lis = wrap $ stateL ld $ \draggedIns
 showTree :: Maybe InstanceState -> Lens' st NodeState -> Component st
 showTree draggedInst l = div
   [ onTrackedDragEnd $ \e -> case draggedInst of
-      Just inst -> modify $ set l $ NodeState True "RECT" (NodeArray [])
+      Just inst -> modify $ set l $ NodeState "RECT" False (NodeArray True [])
       Nothing -> pure ()
   ]
   [ go 0 l ]
@@ -203,27 +204,89 @@ showTree draggedInst l = div
     go :: Int -> Lens' st NodeState -> Component st
     go level l = stateL l $ \NodeState {..} -> div [ frame ] $ mconcat
       [ [ span
-            [ onClick $ \_ -> modify $ over (l % nodeOpen) not ]
-            [ text $ (if _nodeOpen then "-" else "+") <> _nodeName ]
+            [ style [ ("borderTop", if _nodeMouseOver && isJust draggedInst then "2px solid #333" else "") ]
+            , onClick $ \_ -> modify $ over (l % nodeChildren % _NodeArray % _1) not
+            , onMouseEnter $ \_ -> modify $ set (l % nodeMouseOver) True
+            , onMouseLeave $ \_ -> modify $ set (l % nodeMouseOver) False
+            ]
+            [ text $ case _nodeChildren of
+                NodeArray True _ -> "- " <> _nodeName
+                NodeArray False _ -> "+ " <> _nodeName
+                NodeString v -> _nodeName <> ": " <> v
+                NodeNumber v -> _nodeName <> ": " <> pack (show v)
+                NodeBool v -> _nodeName <> ": " <> if v then "true" else "false"
+            ]
         ]
     
-      , if _nodeOpen
-          then case _nodeChildren of
-            NodeArray children -> 
-              [ go (level + 1) (toLens (error "showTree") $ l % nodeChildren % _NodeArray % ix i)
-              | (i, _) <- zip [0..] children
-              ]  
+      , case _nodeChildren of
+          NodeArray True children -> 
+            [ go (level + 1) (toLens (error "showTree") $ l % nodeChildren % _NodeArray % _2 % ix i)
+            | (i, _) <- zip [0..] children
+            ]  
+          _ -> []
+      ]
+      where
+        frame = style
+          -- [ ("paddingLeft", pack (show $ level * 12) <> "px")
+          [ ("paddingLeft", px 12)
+          , ("fontFamily", "Helvetica")
+          , ("fontSize", "14px")
+          , ("lineHeight", "20px")
+          ]
+
+showTree' :: Maybe InstanceState -> AffineTraversal' st A.Value -> Lens' st (HS.HashSet Text, Maybe Text) -> Component st
+showTree' draggedInst lv l = div
+  [ onTrackedDragEnd $ \e -> case draggedInst of
+      Just inst -> do
+        modify $ set lv A.Null
+        modify $ set l (HS.empty, Nothing)
+      Nothing -> pure ()
+  ]
+  [ go "root" "root" lv ]
+  where
+    go path nodeName lv = state $ \st -> let value = preview lv st in stateL l $ \(openNodes, mouseOverNode) -> div [ frame ] $ mconcat
+      [ [ span
+            [ style [ ("borderTop", if Just nodeName == mouseOverNode && isJust draggedInst then "2px solid #333" else "") ]
+            , onClick $ \_ -> modify $ over (l % _1) (toggle nodeName)
+            , onMouseEnter $ \_ -> modify $ set (l % _2) (Just nodeName)
+            , onMouseLeave $ \_ -> modify $ set (l % _2) Nothing
+            ]
+            $ case value of
+                Just A.Null -> [ text $ nodeName <> ": <null>" ]
+                Just (A.String v) -> [ text $ nodeName <> ": " <> v ]
+                Just (A.Bool v) -> [ text $ nodeName <> ": " <> if v then "true" else "false" ]
+                Just (A.Number v) -> [ text $ nodeName <> ": " <> pack (show v) ]
+                Just (A.Object o) -> [ text $ (if isOpen openNodes then "- " else "+ ") <> nodeName ]
+                Just (A.Array o) -> [ text $ (if isOpen openNodes then "- " else "+ ") <> nodeName ]
+                _ -> []
+        ]
+      , if isOpen openNodes
+          then case value of
+            Just (A.Object o) ->
+              [ go (path <> "." <> k) k (lv % A.key k)
+              | (k, v) <- H.toList o
+              ]
+            Just (A.Array o) ->
+              [ go (path <> "[" <> pack (show k) <> "]") (pack $ show k) (lv % A.nth k)
+              | (k, v) <- zip [0..] (V.toList o)
+              ]
             _ -> []
           else []
       ]
       where
+        isOpen hs = HS.member path hs
+
+        toggle v hs
+          | HS.member v hs = HS.delete v hs
+          | otherwise = HS.insert v hs
+
         frame = style
-          [ ("paddingLeft", pack (show $ level * 12) <> "px")
+          -- [ ("paddingLeft", pack (show $ level * 12) <> "px")
+          [ ("paddingLeft", px 12)
           , ("fontFamily", "Helvetica")
           , ("fontSize", "14px")
-          , ("lineHeight", "18px")
+          , ("lineHeight", "20px")
           ]
-
 
 -- Song ------------------------------------------------------------------------
 
