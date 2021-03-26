@@ -27,7 +27,7 @@ extractResult (A.Error e)   = error e
 
 data Target = Target
   { targetValue :: Maybe T.Text
-  }
+  } deriving Show
 
 instance A.FromJSON Target where
   parseJSON (A.Object o) = Target
@@ -45,7 +45,7 @@ data BaseEvent = BaseEvent
   , timeStamp        :: !Double
   , eventType        :: !T.Text
   , isTrusted        :: !Bool
-  }
+  } deriving Show
 
 instance A.FromJSON BaseEvent where
   parseJSON (A.Object o) = BaseEvent
@@ -77,7 +77,7 @@ data MouseEvent = MouseEvent
   , mouseScreenX       :: !Int
   , mouseScreenY       :: !Int
   , mouseShiftKey      :: !Bool
-  }
+  } deriving Show
 
 instance A.FromJSON MouseEvent where
   parseJSON obj@(A.Object o) = MouseEvent
@@ -108,7 +108,7 @@ data KeyboardEvent = KeyboardEvent
   , kbdMetaKey     :: !Bool
   , kbdRepeat      :: !Bool
   , kbdShiftKey    :: !Bool
-  }
+  } deriving Show
 
 instance A.FromJSON KeyboardEvent where
   parseJSON obj@(A.Object o) = KeyboardEvent
@@ -231,6 +231,7 @@ dragAndDrop ctx cb event = do
         \   callCallback(arg, [e.clientX, e.clientY]); \n\
         \ }; \n\
         \ var up = function(e) { \n\
+        \   console.log('up', e); \n\
         \   window.removeEventListener('mousemove', drag); \n\
         \   window.removeEventListener('mouseup', up); \n\
         \   callCallback(arg, null); \n\

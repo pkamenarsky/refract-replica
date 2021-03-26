@@ -197,7 +197,9 @@ windowForInstance getBounds startDrag ld lv lis = wrap $ stateL ld $ \draggedIns
 showTree :: Maybe InstanceState -> Lens' st NodeState -> Component st
 showTree draggedInst l = div
   [ onTrackedDragEnd $ \e -> case draggedInst of
-      Just inst -> modify $ set l $ NodeState "RECT" False (NodeArray True [])
+      Just inst -> do
+        liftIO $ print e
+        modify $ set l $ NodeState "RECT" False (NodeArray True [])
       Nothing -> pure ()
   ]
   [ go 0 l ]
