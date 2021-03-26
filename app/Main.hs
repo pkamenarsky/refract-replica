@@ -177,8 +177,9 @@ windowForInstance
   -> Component st
 windowForInstance getBounds startDrag ld lv lis = wrap $ stateL ld $ \draggedInst -> stateL lis $ \st -> case _instInstance st of
   InstanceRect -> div [ fill ] []
-  InstanceTree p-> oneOrWarning p (lv % pathToLens p) (showTree draggedInst)
-  InstanceSong p-> oneOrWarning p (lv % pathToLens p) (song getBounds startDrag ld)
+  InstanceTree st -> oneOrWarning st (lv % pathToLens st) (showTree draggedInst)
+  InstanceSong st -> oneOrWarning st (lv % pathToLens st) (song getBounds startDrag ld)
+  InstanceInspector st v -> oneOrWarning st (lv % pathToLens st) (inspector draggedInst (lv % pathToLens v))
   where
     wrap cmp = window cmp startDrag (lis % instWindowState)
 
@@ -234,33 +235,33 @@ showTree draggedInst l = div
           , ("lineHeight", "20px")
           ]
 
-showTree' :: Maybe InstanceState -> AffineTraversal' st A.Value -> Lens' st (HS.HashSet Text, Maybe Text) -> Component st
-showTree' draggedInst lv l = div
+inspector :: Maybe InstanceState -> AffineTraversal' st A.Value -> Lens' st InspectorState -> Component st
+inspector draggedInst lv l = div
   [ onTrackedDragEnd $ \e -> case draggedInst of
       Just inst -> do
         modify $ set lv A.Null
-        modify $ set l (HS.empty, Nothing)
+        modify $ set l defaultInspectorState
       Nothing -> pure ()
   ]
   [ go "root" "root" lv ]
   where
-    go path nodeName lv = state $ \st -> let value = preview lv st in stateL l $ \(openNodes, mouseOverNode) -> div [ frame ] $ mconcat
+    go path nodeName lv = state $ \st -> let value = preview lv st in stateL l $ \InspectorState {..} -> div [ frame ] $ mconcat
       [ [ span
-            [ style [ ("borderTop", if Just nodeName == mouseOverNode && isJust draggedInst then "2px solid #333" else "") ]
-            , onClick $ \_ -> modify $ over (l % _1) (toggle nodeName)
-            , onMouseEnter $ \_ -> modify $ set (l % _2) (Just nodeName)
-            , onMouseLeave $ \_ -> modify $ set (l % _2) Nothing
+            [ style [ ("borderTop", if Just path == _inspMouseOverNode && isJust draggedInst then "2px solid #333" else "") ]
+            , onClick $ \_ -> modify $ over (l % inspOpenNodes) (toggle path)
+            , onMouseEnter $ \_ -> modify $ set (l % inspMouseOverNode) (Just path)
+            , onMouseLeave $ \_ -> modify $ set (l % inspMouseOverNode) Nothing
             ]
             $ case value of
                 Just A.Null -> [ text $ nodeName <> ": <null>" ]
                 Just (A.String v) -> [ text $ nodeName <> ": " <> v ]
                 Just (A.Bool v) -> [ text $ nodeName <> ": " <> if v then "true" else "false" ]
                 Just (A.Number v) -> [ text $ nodeName <> ": " <> pack (show v) ]
-                Just (A.Object o) -> [ text $ (if isOpen openNodes then "- " else "+ ") <> nodeName ]
-                Just (A.Array o) -> [ text $ (if isOpen openNodes then "- " else "+ ") <> nodeName ]
+                Just (A.Object o) -> [ text $ (if isOpen _inspOpenNodes then "- " else "+ ") <> nodeName ]
+                Just (A.Array o) -> [ text $ (if isOpen _inspOpenNodes then "- " else "+ ") <> nodeName ]
                 _ -> []
         ]
-      , if isOpen openNodes
+      , if isOpen _inspOpenNodes
           then case value of
             Just (A.Object o) ->
               [ go (path <> "." <> k) k (lv % A.key k)
@@ -281,7 +282,6 @@ showTree' draggedInst lv l = div
           | otherwise = HS.insert v hs
 
         frame = style
-          -- [ ("paddingLeft", pack (show $ level * 12) <> "px")
           [ ("paddingLeft", px 12)
           , ("fontFamily", "Helvetica")
           , ("fontSize", "14px")

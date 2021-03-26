@@ -9,6 +9,7 @@ module Types where
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Optics as A
 import qualified Data.HashMap.Strict as H
+import qualified Data.HashSet as HS
 import qualified Data.Vector as V
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
@@ -63,6 +64,17 @@ pathToLens (Key k:ps) = A.key k % pathToLens ps
 pathToLens (Index i:ps) = A.nth i % pathToLens ps
 
 --------------------------------------------------------------------------------
+
+data InspectorState = InspectorState
+  { _inspOpenNodes :: HS.HashSet Text
+  , _inspMouseOverNode :: Maybe Text
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
+defaultInspectorState :: InspectorState
+defaultInspectorState = InspectorState
+  { _inspOpenNodes = HS.empty
+  , _inspMouseOverNode = Nothing
+  }
 
 data NodeValue
   = NodeString Text
@@ -133,6 +145,7 @@ data PlaylistState = PlaylistState deriving (Show, Generic, A.FromJSON, A.ToJSON
 data Instance
   = InstanceRect
   | InstanceTree Path
+  | InstanceInspector Path Path
   | InstanceSong Path
   | InstancePlaylist [Path]
   deriving (Show, Generic, A.FromJSON, A.ToJSON)
@@ -158,6 +171,7 @@ globalState :: A.Value
 globalState = A.object
   [ "files" A..= jsonToNodeState "root" (A.toJSON defaultNodeState) (NodeState "" False (NodeArray False []))
   , "song" A..= defaultSongState
+  , "inspector" A..= defaultInspectorState
   ]
 
 defaultState = State
@@ -166,6 +180,7 @@ defaultState = State
     [ InstanceState defaultWindowState (InstanceTree [Key "files"])
     , InstanceState defaultWindowState (InstanceTree [Key "files"])
     , InstanceState defaultWindowState (InstanceSong [Key "song"])
+    , InstanceState defaultWindowState (InstanceInspector [Key "inspector"] [])
     ]
   , _global = globalState
   }
@@ -176,6 +191,7 @@ makeLenses ''Rect
 makeLenses ''Point
 makeLenses ''WindowState
 makePrisms ''NodeValue
+makeLenses ''InspectorState
 makeLenses ''NodeState
 makeLenses ''Instance
 makeLenses ''InstanceState
