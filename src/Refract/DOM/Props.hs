@@ -7,12 +7,12 @@ import qualified Control.Monad.Trans.State as ST
 import qualified Data.Text                 as T
 
 import           Replica.VDOM              (DOMEvent)
-import           Replica.VDOM.Types        (DOMEvent(getDOMEvent))
+import           Replica.VDOM.Types        (DOMEvent(getDOMEvent), EventOptions(EventOptions))
 
 data Prop st
   = PropText T.Text
   | PropBool Bool
-  | PropEvent (DOMEvent -> ST.StateT st IO ())
+  | PropEvent EventOptions (DOMEvent -> ST.StateT st IO ())
   | PropMap [Props st]
 
 data Props st = Props T.Text (Prop st)

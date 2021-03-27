@@ -40,8 +40,9 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-- git: https://github.com/pkamenarsky/replica.git
-  commit: a7d742ba0d81b1af8084ca84b8db832c163e35a1
+# - git: https://github.com/pkamenarsky/replica.git
+#   commit: a7d742ba0d81b1af8084ca84b8db832c163e35a1
+- ./vendor/replica
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

@@ -41,14 +41,16 @@ import Optics.Setter
 import Optics.TH
 
 import Refract.DOM.Events
-import Refract.DOM.Props
+import Refract.DOM.Props hiding (width, height)
 import Refract.DOM
 import Refract
 
 import GHC.Generics (Generic)
 
+import Replica.VDOM.Types (EventOptions (EventOptions))
 import qualified Network.Wai.Handler.Replica as R
 
+import Layout
 import Types
 
 import Prelude hiding (div, span)
@@ -59,9 +61,6 @@ stateL l f = state $ \st -> f (view l st)
 zoom :: Lens' st a -> Component a -> Component st
 zoom l cmp = Component $ \path setState st -> runComponent cmp path (\a -> setState (set l a st)) (view l st)
 
-px :: Int -> Text
-px x = pack (show x) <> "px"
-
 onTrackedDragEnd :: (MouseEvent -> ST.StateT st IO ()) -> Props st
 onTrackedDragEnd = onMouseUp
 
@@ -70,13 +69,9 @@ oneOrWarning p l f = state $ \st -> case preview l st of
   Nothing -> div [ frame ] []
   Just _ -> f (toLens (error "defaultComponent") l)
   where
-    frame = style
-      [ ("position", "absolute")
-      , ("left", px 0) -- TODO
-      , ("top", px 0)
-      , ("right", px 0)
-      , ("bottom", px 0)
-      , ("backgroundColor", "#f00")
+    frame = style $ mconcat
+      [ posAbsFill
+      , [ backgroundColor "#f00" ]
       ]
 
 oneOrEmpty :: AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
@@ -94,7 +89,7 @@ shareable
   -> Props st
 shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dragStarted dragDragging dragDropped
   where
-    dragStarted x y = do
+    dragStarted _ _ = do
       (x, y, w, h) <- liftIO getParentBounds
 
       modify $ set l $ Just $ InstanceState
@@ -110,6 +105,17 @@ shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dra
 
 -- Window  ---------------------------------------------------------------------
 
+layout :: Component st
+layout = div
+  [ frame ]
+  [ div [ subdivision ] [] ]
+  where
+    frame = style [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0) ]
+    subdivision = style
+      [ posAbsolute, left (px 0), top (px 0), bottom (px 0), width (pct 50)
+      , borderRight (solidBorder "#333" 1)
+      ]
+
 window :: Component st -> StartDrag st -> Lens' st WindowState -> Component st
 window cmp startDrag l = stateL l $ \ws -> div
   [ frame ws ]
@@ -117,7 +123,7 @@ window cmp startDrag l = stateL l $ \ws -> div
       [ header (_wndTitleBar ws)
       , onMouseDown $ \e -> startDrag e dragStarted dragDragging dragDropped
       ] []
-  , div [ content (_wndTitleBar ws) ] [ cmp ]
+  , div [ content True {- (_wndTitleBar ws) -} ] [ cmp ]
   ]
   where
     dragStarted _ _ = modify $ set (l % wndDragOffset) (Just origin)
@@ -136,7 +142,7 @@ window cmp startDrag l = stateL l $ \ws -> div
       , ("width", px w)
       , ("height", px h)
       , ("border", "1px solid #333")
-      , ("borderRadius", if _wndTitleBar then "5px 5px 0px 0px" else "")
+      -- , ("borderRadius", if _wndTitleBar then "5px 5px 0px 0px" else "")
       , ("pointerEvents", case _wndDragOffset of
             Just _ -> "none"
             Nothing -> "auto"
@@ -342,6 +348,8 @@ main = do
 
         -- Dragged instance
         , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance bounds drag draggedInstance global ]
+
+        -- , [ layout ]
         ]
   where
     frame = style []
@@ -362,3 +370,37 @@ main = do
           storeState defaultState
           pure $ Just defaultState
         Just store -> A.decode <$> Store.readStore (Store.Store 0)
+
+--------------------------------------------------------------------------------
+
+main2 :: IO ()
+main2 = do
+  runDefault 3777 "Tree" (\_ -> pure ()) (pure Nothing) (pure <$> newTChanIO) $ \ctx _ -> state $ \st ->
+    div (props st)
+      [ div
+          [ innerFrame
+          , onClick $ \_ -> liftIO $ print "inner click"
+          ]
+          []
+      , text $ pack (show st)
+      ]
+  where
+    props dragged = mconcat
+      [ [ frame ]
+      -- , onClickWithOptions (EventOptions True False False) $ \_ -> liftIO $ print "click"
+      , case dragged of
+          Just _ ->
+            [ onMouseMoveWithOptions (EventOptions True False False) $ \e -> ST.put $ Just (mouseClientX e, mouseClientY e)
+            , onMouseUp $ \_ -> ST.put Nothing
+            ]
+          Nothing -> [ onMouseDown $ \e -> ST.put $ Just (mouseClientX e, mouseClientY e) ]
+      ]
+    frame = style
+      [ posAbsolute, left (px 100), top (px 100), width (px 300), height (px 300)
+      , ("backgroundColor", "#777")
+      ]
+
+    innerFrame = style
+      [ posAbsolute, left (px 100), top (px 100), width (px 100), height (px 100)
+      , ("backgroundColor", "#333")
+      ]

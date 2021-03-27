@@ -3,18 +3,7 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages:
-- completed:
-    name: replica
-    version: 0.1.0.0
-    git: https://github.com/pkamenarsky/replica.git
-    pantry-tree:
-      size: 1319
-      sha256: f0f5f9fdfdf04628ce4c6b8c08938897b26a3defda9ce484f1959ecf18b4e5d4
-    commit: a7d742ba0d81b1af8084ca84b8db832c163e35a1
-  original:
-    git: https://github.com/pkamenarsky/replica.git
-    commit: a7d742ba0d81b1af8084ca84b8db832c163e35a1
+packages: []
 snapshots:
 - completed:
     size: 532380
