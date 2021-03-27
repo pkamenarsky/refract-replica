@@ -123,7 +123,7 @@ window cmp startDrag l = stateL l $ \ws -> div
       [ header (_wndTitleBar ws)
       , onMouseDown $ \e -> startDrag e dragStarted dragDragging dragDropped
       ] []
-  , div [ content True {- (_wndTitleBar ws) -} ] [ cmp ]
+  , div [ content (_wndTitleBar ws) ] [ cmp ]
   ]
   where
     dragStarted _ _ = modify $ set (l % wndDragOffset) (Just origin)
@@ -142,7 +142,7 @@ window cmp startDrag l = stateL l $ \ws -> div
       , ("width", px w)
       , ("height", px h)
       , ("border", "1px solid #333")
-      -- , ("borderRadius", if _wndTitleBar then "5px 5px 0px 0px" else "")
+      , ("borderRadius", if _wndTitleBar then "5px 5px 0px 0px" else "")
       , ("pointerEvents", case _wndDragOffset of
             Just _ -> "none"
             Nothing -> "auto"
