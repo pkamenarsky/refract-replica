@@ -58,4 +58,4 @@ color :: Text -> (Text, Text)
 color c = ("color", c)
 
 backgroundColor :: Text -> (Text, Text)
-backgroundColor c = ("backgroundColor", c)
+backgroundColor c = ("background-color", c)

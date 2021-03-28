@@ -151,19 +151,22 @@ data Instance
   deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 data InstanceState = InstanceState
-  { _instWindowState :: WindowState
+  { _instName :: Text
+  , _instWindowState :: WindowState
   , _instInstance :: Instance
   } deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 defaultInstanceState :: InstanceState
 defaultInstanceState = InstanceState
-  { _instWindowState = defaultWindowState
+  { _instName = "X"
+  , _instWindowState = defaultWindowState
   , _instInstance = InstanceRect
   }
 
 data State = State
   { _draggedInstance :: Maybe InstanceState
-  , _instances :: [InstanceState]
+  , _draggedWindow :: Maybe Text
+  , _instances :: H.HashMap Text InstanceState
   , _global :: A.Value
   , _ctrlPressed :: Bool
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
@@ -177,11 +180,12 @@ globalState = A.object
 
 defaultState = State
   { _draggedInstance = Nothing
-  , _instances =
-    [ InstanceState defaultWindowState (InstanceTree [Key "files"])
-    , InstanceState defaultWindowState (InstanceTree [Key "files"])
-    , InstanceState defaultWindowState (InstanceSong [Key "song"])
-    , InstanceState defaultWindowState (InstanceInspector [Key "inspector"] [])
+  , _draggedWindow = Nothing
+  , _instances = H.fromList
+    [ ("A", InstanceState "A" defaultWindowState (InstanceTree [Key "files"]))
+    , ("B", InstanceState "B" defaultWindowState (InstanceTree [Key "files"]))
+    , ("C", InstanceState "C" defaultWindowState (InstanceSong [Key "song"]))
+    , ("D", InstanceState "D" defaultWindowState (InstanceInspector [Key "inspector"] []))
     ]
   , _global = globalState
   , _ctrlPressed = False

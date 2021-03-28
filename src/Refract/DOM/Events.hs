@@ -333,9 +333,11 @@ keyEvents ctx keyDown keyUp = do
   where
     js = "var keydown = function(e) { \n\
         \   callCallback(arg[0], JSON.parse(stringifyEvent(e)), true); \n\
+        \   if (e.key == 'Alt') e.preventDefault(); \n\
         \ }; \n\
         \ var keyup = function(e) { \n\
         \   callCallback(arg[1], JSON.parse(stringifyEvent(e)), true); \n\
+        \   if (e.key == 'Alt') e.preventDefault(); \n\
         \ }; \n\
         \ window.addEventListener('keydown', keydown); \n\
         \ window.addEventListener('keyup', keyup); \n\

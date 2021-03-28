@@ -94,7 +94,8 @@ shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dra
       (x, y, w, h) <- liftIO getParentBounds
 
       modify $ set l $ Just $ InstanceState
-        { _instWindowState = WindowState
+        { _instName = "DRAGGED"
+        , _instWindowState = WindowState
             { _wndRect = Rect (round x) (round y) (round w) (round h)
             , _wndDragOffset = Just origin
             , _wndTitleBar = False
@@ -106,36 +107,89 @@ shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dra
 
 -- Window  ---------------------------------------------------------------------
 
-layout :: Component st
-layout = div
-  [ frame ]
-  [ div [ hl ] [ div [ vt ] [], div [ vb ] []]
-  , div [ hr ] [ div [ vt ] [], div [ vb ] []]
-  ]
+layout :: Lens' st (Maybe InstanceState) -> Component st
+layout l = stateL l $ \draggedInst -> div [ frame draggedInst ] (dropTargets 0)
   where
-    frame = style
-      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0)
-      , ("pointerEvents", "none")
-      , ("backgroundColor", "#000")
+    frame draggedInst = style $ mconcat
+      [ [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0) ]
+      , case draggedInst of
+          Just _ -> []
+          Nothing -> [ ("pointer-events", "none") ]
+      , [ -- ("background-color", "#000")
+        -- , ("opacity", "0.5")
+        ]
+      ]
+
+    dropTargets level
+      | level >= 2 = []
+      -- | level == 2 = [ div [ mid ] [] ]
+      | otherwise = 
+          [ div [ hl ] [ div [ vt ] (dropTargets (level + 1)), div [ vb ] (dropTargets (level + 1)) ]
+          , div [ hr ] [ div [ vt ] (dropTargets (level + 1)), div [ vb ] (dropTargets (level + 1)) ]
+          , div [ mid, onMouseUp $ \_ -> modify $ set (l % _Just % instWindowState % wndRect) (Rect 0 0 100 100) ] []
+          , div [ rl ] []
+          , div [ ll ] []
+          , div [ tl ] []
+          , div [ bl ] []
+          ]
+
+    mid = style
+      [ posAbsolute, left (pct 50), top (pct 50), width (px 48), height (px 48)
+      , ("margin-left", "-24px")
+      , ("margin-top", "-24px")
+      , ("border-radius", "5px")
+      , backgroundColor "#000"
+      , ("opacity", "0.5")
+      ]
+    tl = style
+      [ posAbsolute, left (pct 50), top (pct 50), width (px 48), height (px 24)
+      , ("margin-left", "-24px")
+      , ("margin-top", "-60px")
+      , ("border-radius", "5px")
+      , backgroundColor "#000"
+      , ("opacity", "0.5")
+      ]
+    bl = style
+      [ posAbsolute, left (pct 50), top (pct 50), width (px 48), height (px 24)
+      , ("margin-left", "-24px")
+      , ("margin-top", "36px")
+      , ("border-radius", "5px")
+      , backgroundColor "#000"
+      , ("opacity", "0.5")
+      ]
+    rl = style
+      [ posAbsolute, left (pct 50), top (pct 50), width (px 24), height (px 48)
+      , ("margin-left", "36px")
+      , ("margin-top", "-24px")
+      , ("border-radius", "5px")
+      , backgroundColor "#000"
+      , ("opacity", "0.5")
+      ]
+    ll = style
+      [ posAbsolute, left (pct 50), top (pct 50), width (px 24), height (px 48)
+      , ("margin-left", "-60px")
+      , ("margin-top", "-24px")
+      , ("border-radius", "5px")
+      , backgroundColor "#000"
       , ("opacity", "0.5")
       ]
     hl = style
       [ posAbsolute, left (px 0), top (px 0), bottom (px 0), right (pct 50)
-      , borderRight (solidBorder "#fff" 1)
+      -- , borderRight (solidBorder "#777" 1)
       ]
     hr = style
       [ posAbsolute, left (pct 50), top (px 0), bottom (px 0), right (px 0)
       ]
     vt = style
       [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (pct 50)
-      , borderBottom (solidBorder "#fff" 1)
+      -- , borderBottom (solidBorder "#777" 1)
       ]
     vb = style
       [ posAbsolute, left (px 0), top (pct 50), right (px 0), bottom (px 0)
       ]
 
-window :: Component st -> StartDrag st -> Lens' st WindowState -> Component st
-window cmp startDrag l = stateL l $ \ws -> div
+window :: Component st -> StartDrag st -> Lens' st (Maybe Text) -> Lens' st WindowState -> Component st
+window cmp startDrag ldw l = stateL l $ \ws -> div
   [ frame ws ]
   [ div
       [ header (_wndTitleBar ws)
@@ -144,14 +198,18 @@ window cmp startDrag l = stateL l $ \ws -> div
   , div [ content (_wndTitleBar ws) ] [ cmp ]
   ]
   where
-    dragStarted _ _ = modify $ set (l % wndDragOffset) (Just origin)
+    dragStarted _ _ = do
+      modify $ set (l % wndDragOffset) (Just origin)
+      modify $ set ldw (Just "A")
     dragDragging x y = modify $ set (l % wndDragOffset % _Just) (Point x y)
-    dragDropped = modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
-      { _wndRect = case offset of
-          Just (Point ox oy) -> Rect (x + ox) (y + oy) w h
-          Nothing -> _wndRect st
-      , _wndDragOffset = Nothing
-      }
+    dragDropped = do
+      modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
+        { _wndRect = case offset of
+            Just (Point ox oy) -> Rect (x + ox) (y + oy) w h
+            Nothing -> _wndRect st
+        , _wndDragOffset = Nothing
+        }
+      modify $ set ldw Nothing
 
     frame WindowState {..} = style
       [ ("position", "absolute")
@@ -160,11 +218,12 @@ window cmp startDrag l = stateL l $ \ws -> div
       , ("width", px w)
       , ("height", px h)
       , ("border", "1px solid #333")
-      , ("borderRadius", if _wndTitleBar then "5px 5px 0px 0px" else "")
-      , ("pointerEvents", case _wndDragOffset of
+      , ("border-radius", if _wndTitleBar then "5px 5px 0px 0px" else "")
+      , ("pointer-events", case _wndDragOffset of
             Just _ -> "none"
             Nothing -> "auto"
         )
+      , ("user-select", "none")
       ]
       where
         Rect x y w h = _wndRect
@@ -176,8 +235,9 @@ window cmp startDrag l = stateL l $ \ws -> div
       , ("top", px 0)
       , ("width", "100%")
       , ("height", px (if bar then 24 else 0))
-      , ("backgroundColor", "#333")
-      , ("borderRadius", "2px 2px 0px 0px")
+      , ("background-color", "#333")
+      , ("border-radius", "2px 2px 0px 0px")
+      , ("user-select", "none")
       ]
     content bar = style
       [ ("position", "absolute")
@@ -185,8 +245,8 @@ window cmp startDrag l = stateL l $ \ws -> div
       , ("top", px (if bar then 24 else 0))
       , ("width", "100%")
       , ("bottom", px 0)
-      , ("backgroundColor", "#fff")
-      , ("userSelect", "none")
+      , ("background-color", "#fff")
+      , ("user-select", "none")
       , ("overflow", "auto")
       ]
 
@@ -195,17 +255,18 @@ window cmp startDrag l = stateL l $ \ws -> div
 windowForInstance
   :: GetBounds
   -> StartDrag st
+  -> Lens' st (Maybe Text)
   -> Lens' st (Maybe InstanceState)
   -> Lens' st A.Value
   -> Lens' st InstanceState
   -> Component st
-windowForInstance getBounds startDrag ld lv lis = wrap $ stateL ld $ \draggedInst -> stateL lis $ \st -> case _instInstance st of
+windowForInstance getBounds startDrag ldw ld lv lis = wrap $ stateL ld $ \draggedInst -> stateL lis $ \st -> case _instInstance st of
   InstanceRect -> div [ fill ] []
   InstanceTree st -> oneOrWarning st (lv % pathToLens st) (showTree draggedInst)
   InstanceSong st -> oneOrWarning st (lv % pathToLens st) (song getBounds startDrag ld)
   InstanceInspector st v -> oneOrWarning st (lv % pathToLens st) (inspector draggedInst (lv % pathToLens v))
   where
-    wrap cmp = window cmp startDrag (lis % instWindowState)
+    wrap cmp = window cmp startDrag ldw (lis % instWindowState)
 
     fill = style
       [ ("position", "absolute")
@@ -213,7 +274,7 @@ windowForInstance getBounds startDrag ld lv lis = wrap $ stateL ld $ \draggedIns
       , ("top", px 0)
       , ("right", px 0)
       , ("bottom", px 0)
-      , ("backgroundColor", "#f00")
+      , ("background-color", "#f00")
       ]
 
 -- Tree ------------------------------------------------------------------------
@@ -231,7 +292,7 @@ showTree draggedInst l = div
     go :: Int -> Lens' st NodeState -> Component st
     go level l = stateL l $ \NodeState {..} -> div [ frame ] $ mconcat
       [ [ span
-            [ style [ ("borderTop", if _nodeMouseOver && isJust draggedInst then "2px solid #333" else "") ]
+            [ style [ ("border-top", if _nodeMouseOver && isJust draggedInst then "2px solid #333" else "") ]
             , onClick $ \_ -> modify $ over (l % nodeChildren % _NodeArray % _1) not
             , onMouseEnter $ \_ -> modify $ set (l % nodeMouseOver) True
             , onMouseLeave $ \_ -> modify $ set (l % nodeMouseOver) False
@@ -255,10 +316,10 @@ showTree draggedInst l = div
       where
         frame = style
           -- [ ("paddingLeft", pack (show $ level * 12) <> "px")
-          [ ("paddingLeft", px 12)
-          , ("fontFamily", "Helvetica")
-          , ("fontSize", "14px")
-          , ("lineHeight", "20px")
+          [ ("padding-left", px 12)
+          , ("font-family", "Helvetica")
+          , ("font-size", "14px")
+          , ("line-height", "20px")
           ]
 
 inspector :: Maybe InstanceState -> AffineTraversal' st A.Value -> Lens' st InspectorState -> Component st
@@ -273,7 +334,7 @@ inspector draggedInst lv l = div
   where
     go path nodeName lv = state $ \st -> let value = preview lv st in stateL l $ \InspectorState {..} -> div [ frame ] $ mconcat
       [ [ span
-            [ style [ ("borderTop", if Just path == _inspMouseOverNode && isJust draggedInst then "2px solid #333" else "") ]
+            [ style [ ("border-top", if Just path == _inspMouseOverNode && isJust draggedInst then "2px solid #333" else "") ]
             , onClick $ \_ -> modify $ over (l % inspOpenNodes) (toggle path)
             , onMouseEnter $ \_ -> modify $ set (l % inspMouseOverNode) (Just path)
             , onMouseLeave $ \_ -> modify $ set (l % inspMouseOverNode) Nothing
@@ -308,10 +369,10 @@ inspector draggedInst lv l = div
           | otherwise = HS.insert v hs
 
         frame = style
-          [ ("paddingLeft", px 12)
-          , ("fontFamily", "Helvetica")
-          , ("fontSize", "14px")
-          , ("lineHeight", "20px")
+          [ ("padding-left", px 12)
+          , ("font-family", "Helvetica")
+          , ("font-size", "14px")
+          , ("line-height", "20px")
           ]
 
 -- Song ------------------------------------------------------------------------
@@ -345,7 +406,7 @@ song getBounds startDrag ld l = div []
       , ("right", px 8)
       , ("width", px 8)
       , ("height", px 8)
-      , ("backgroundColor", "#333")
+      , ("background-color", "#333")
       ]
 
 -- OS --------------------------------------------------------------------------
@@ -356,20 +417,19 @@ main = do
     let drag = startDrag ctx ddChan
         bounds = getBounds ctx
       in state $ \st -> div [ frame ] $ mconcat
-        [ [ div [ style [ ("userSelect", "none") ] ] [ text (pack $ show st) ] ]
-        , [ text (pack $ show $ _ctrlPressed st) ]
+        [ [ div [ style [ ("user-select", "none") ] ] [ text (pack $ show st) ] ]
         -- , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
 
         -- Instances
-        , [ windowForInstance bounds drag draggedInstance global (instances % unsafeIx i)
-          | (i, _) <- zip [0..] (_instances st)
+        , [ windowForInstance bounds drag draggedWindow draggedInstance global (toLens (error "at") $ instances % at i % _Just)
+          | (i, _) <- H.toList (_instances st)
           ]
 
         -- Dragged instance
-        , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance bounds drag draggedInstance global ]
+        , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance bounds drag draggedWindow draggedInstance global ]
 
         , if _ctrlPressed st
-            then [ layout ]
+            then [ layout (instances % at (fromMaybe "NONE" $ _draggedWindow st)) ]
             else []
         ]
   where
@@ -380,7 +440,7 @@ main = do
       pure [ddChan, keyChan]
       where
         setCtrl v' v e
-          | kbdKey e == "Control" = v
+          | kbdKey e == "Alt" = v
           | otherwise = v'
 
         keyDown keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) True e })
@@ -431,10 +491,10 @@ main2 = do
       ]
     frame = style
       [ posAbsolute, left (px 100), top (px 100), width (px 300), height (px 300)
-      , ("backgroundColor", "#777")
+      , ("background-color", "#777")
       ]
 
     innerFrame = style
       [ posAbsolute, left (px 100), top (px 100), width (px 100), height (px 100)
-      , ("backgroundColor", "#333")
+      , ("background-color", "#333")
       ]
