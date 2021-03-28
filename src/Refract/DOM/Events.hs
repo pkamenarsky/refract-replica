@@ -324,6 +324,23 @@ dragAndDrop ctx cb event = do
       (x - mouseClientX event)
       (y - mouseClientY event)
 
+keyEvents :: R.Context -> (KeyboardEvent -> IO ()) -> (KeyboardEvent -> IO ()) -> IO ()
+keyEvents ctx keyDown keyUp = do
+  jsKeyDownCb <- R.registerCallback ctx keyDown
+  jsKeyUpCb <- R.registerCallback ctx keyUp
+
+  R.call ctx (jsKeyDownCb, jsKeyUpCb) js
+  where
+    js = "var keydown = function(e) { \n\
+        \   callCallback(arg[0], JSON.parse(stringifyEvent(e)), true); \n\
+        \ }; \n\
+        \ var keyup = function(e) { \n\
+        \   callCallback(arg[1], JSON.parse(stringifyEvent(e)), true); \n\
+        \ }; \n\
+        \ window.addEventListener('keydown', keydown); \n\
+        \ window.addEventListener('keyup', keyup); \n\
+        \"
+
 type StartDrag st = 
      MouseEvent
   -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragStarted

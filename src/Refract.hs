@@ -51,16 +51,47 @@ getBounds ctx path = do
 
 --------------------------------------------------------------------------------
 
-run :: Int -> V.HTML -> ConnectionOptions -> Middleware -> (st -> IO ()) -> IO st -> IO [TChan (st -> IO st)] -> (R.Context -> [TChan (st -> IO st)] -> Component st) -> IO ()
-run port index connectionOptions middleware setState st exModStChs component = do
-  cmpStCh <- newTChanIO
-  W.run port $ R.app index connectionOptions middleware st ((,) <$> newTChanIO <*> exModStChs) (step setState component)
+run
+  :: Int
+  -> V.HTML
+  -> ConnectionOptions
+  -> Middleware
+  -> (st -> IO ())
+  -> IO st
+  -> (R.Context -> IO [TChan (st -> IO st)])
+  -> (R.Context -> [TChan (st -> IO st)] -> Component st)
+  -> IO ()
+run port index connectionOptions middleware setState st getExModStChs component = do
+  W.run port $ R.app index connectionOptions middleware st getSession (step setState component)
+  where
+    getSession ctx = do
+      cmpStCh <- newTChanIO
+      exModStChs <- getExModStChs ctx
+      pure (cmpStCh, exModStChs)
 
-runDefault :: Int -> T.Text -> (st -> IO ()) -> IO st -> IO [TChan (st -> IO st)] -> (R.Context -> [TChan (st -> IO st)] -> Component st) -> IO ()
-runDefault port title setState st exModStChs component = do
-  W.run port $ R.app (V.defaultIndex title []) defaultConnectionOptions id st ((,) <$> newTChanIO <*> exModStChs) (step setState component)
+runDefault
+  :: Int
+  -> T.Text
+  -> (st -> IO ())
+  -> IO st
+  -> (R.Context -> IO [TChan (st -> IO st)])
+  -> (R.Context -> [TChan (st -> IO st)] -> Component st)
+  -> IO ()
+runDefault port title setState st getExModStChs component = do
+  W.run port $ R.app (V.defaultIndex title []) defaultConnectionOptions id st getSession (step setState component)
+  where
+    getSession ctx = do
+      cmpStCh <- newTChanIO
+      exModStChs <- getExModStChs ctx
+      pure (cmpStCh, exModStChs)
 
-step :: (st -> IO ()) -> (R.Context -> [TChan (st -> IO st)] -> Component st) -> R.Context -> st -> (TChan st, [TChan (st -> IO st)]) -> IO (V.HTML, R.Event -> Maybe (IO ()), IO (Maybe st))
+step
+  :: (st -> IO ())
+  -> (R.Context -> [TChan (st -> IO st)] -> Component st)
+  -> R.Context
+  -> st
+  -> (TChan st, [TChan (st -> IO st)])
+  -> IO (V.HTML, R.Event -> Maybe (IO ()), IO (Maybe st))
 step setState f ctx st (cmpStCh, exModStChs) = do
   let html = Refract.runComponent (f ctx exModStChs) [0] (atomically . writeTChan cmpStCh) st
   pure

@@ -13,6 +13,7 @@ import Control.Monad.Trans.State (get, modify)
 import qualified Control.Monad.Trans.State as ST
 import Control.Monad.IO.Class (liftIO)
 
+import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 
 import qualified Data.Aeson as A
@@ -108,12 +109,29 @@ shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dra
 layout :: Component st
 layout = div
   [ frame ]
-  [ div [ subdivision ] [] ]
+  [ div [ hl ] [ div [ vt ] [], div [ vb ] []]
+  , div [ hr ] [ div [ vt ] [], div [ vb ] []]
+  ]
   where
-    frame = style [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0) ]
-    subdivision = style
-      [ posAbsolute, left (px 0), top (px 0), bottom (px 0), width (pct 50)
-      , borderRight (solidBorder "#333" 1)
+    frame = style
+      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0)
+      , ("pointerEvents", "none")
+      , ("backgroundColor", "#000")
+      , ("opacity", "0.5")
+      ]
+    hl = style
+      [ posAbsolute, left (px 0), top (px 0), bottom (px 0), right (pct 50)
+      , borderRight (solidBorder "#fff" 1)
+      ]
+    hr = style
+      [ posAbsolute, left (pct 50), top (px 0), bottom (px 0), right (px 0)
+      ]
+    vt = style
+      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (pct 50)
+      , borderBottom (solidBorder "#fff" 1)
+      ]
+    vb = style
+      [ posAbsolute, left (px 0), top (pct 50), right (px 0), bottom (px 0)
       ]
 
 window :: Component st -> StartDrag st -> Lens' st WindowState -> Component st
@@ -334,11 +352,12 @@ song getBounds startDrag ld l = div []
 
 main :: IO ()
 main = do
-  runDefault 3777 "Tree" storeState readStore (pure <$> newTChanIO) $ \ctx [ddChan] ->
+  runDefault 3777 "Tree" storeState readStore channels $ \ctx [ddChan, keyChan] ->
     let drag = startDrag ctx ddChan
         bounds = getBounds ctx
       in state $ \st -> div [ frame ] $ mconcat
         [ [ div [ style [ ("userSelect", "none") ] ] [ text (pack $ show st) ] ]
+        , [ text (pack $ show $ _ctrlPressed st) ]
         -- , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
 
         -- Instances
@@ -349,9 +368,24 @@ main = do
         -- Dragged instance
         , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance bounds drag draggedInstance global ]
 
-        -- , [ layout ]
+        , if _ctrlPressed st
+            then [ layout ]
+            else []
         ]
   where
+    channels ctx = do
+      ddChan <- newTChanIO
+      keyChan <- newTChanIO
+      keyEvents ctx (keyDown keyChan) (keyUp keyChan)
+      pure [ddChan, keyChan]
+      where
+        setCtrl v' v e
+          | kbdKey e == "Control" = v
+          | otherwise = v'
+
+        keyDown keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) True e })
+        keyUp keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) False e })
+
     frame = style []
       -- [ ("backgroundColor", "#bbb")
       -- , ("width", "100%")
@@ -375,7 +409,7 @@ main = do
 
 main2 :: IO ()
 main2 = do
-  runDefault 3777 "Tree" (\_ -> pure ()) (pure Nothing) (pure <$> newTChanIO) $ \ctx _ -> state $ \st ->
+  runDefault 3777 "Tree" (\_ -> pure ()) (pure Nothing) (\_ -> pure <$> newTChanIO) $ \ctx _ -> state $ \st ->
     div (props st)
       [ div
           [ innerFrame

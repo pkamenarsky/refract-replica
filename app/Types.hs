@@ -165,6 +165,7 @@ data State = State
   { _draggedInstance :: Maybe InstanceState
   , _instances :: [InstanceState]
   , _global :: A.Value
+  , _ctrlPressed :: Bool
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 globalState :: A.Value
@@ -183,6 +184,7 @@ defaultState = State
     , InstanceState defaultWindowState (InstanceInspector [Key "inspector"] [])
     ]
   , _global = globalState
+  , _ctrlPressed = False
   }
 
 -- TH --------------------------------------------------------------------------
