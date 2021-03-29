@@ -163,6 +163,16 @@ defaultInstanceState = InstanceState
   , _instInstance = InstanceRect
   }
 
+data LayoutState
+  = LayoutHSplit Int LayoutState LayoutState
+  | LayoutVSplit Int LayoutState LayoutState
+  | LayoutInstance Text Instance
+
+defaultLayoutState :: LayoutState
+defaultLayoutState = LayoutInstance "Inspector" (InstanceTree [Key "files"])
+
+--------------------------------------------------------------------------------
+
 data State = State
   { _draggedInstance :: Maybe InstanceState
   , _draggedWindow :: Maybe Text

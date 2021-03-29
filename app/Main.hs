@@ -188,8 +188,8 @@ layout l = stateL l $ \draggedInst -> div [ frame draggedInst ] (dropTargets 0)
       [ posAbsolute, left (px 0), top (pct 50), right (px 0), bottom (px 0)
       ]
 
-window :: Component st -> StartDrag st -> Lens' st (Maybe Text) -> Lens' st WindowState -> Component st
-window cmp startDrag ldw l = stateL l $ \ws -> div
+window :: Text -> Component st -> StartDrag st -> Lens' st (Maybe Text) -> Lens' st WindowState -> Component st
+window instName cmp startDrag ldw l = stateL l $ \ws -> div
   [ frame ws ]
   [ div
       [ header (_wndTitleBar ws)
@@ -200,7 +200,7 @@ window cmp startDrag ldw l = stateL l $ \ws -> div
   where
     dragStarted _ _ = do
       modify $ set (l % wndDragOffset) (Just origin)
-      modify $ set ldw (Just "A")
+      modify $ set ldw (Just instName)
     dragDragging x y = modify $ set (l % wndDragOffset % _Just) (Point x y)
     dragDropped = do
       modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
@@ -260,13 +260,13 @@ windowForInstance
   -> Lens' st A.Value
   -> Lens' st InstanceState
   -> Component st
-windowForInstance getBounds startDrag ldw ld lv lis = wrap $ stateL ld $ \draggedInst -> stateL lis $ \st -> case _instInstance st of
+windowForInstance getBounds startDrag ldw ld lv lis = stateL ld $ \draggedInst -> stateL lis $ \st -> wrap (_instName st) $ case _instInstance st of
   InstanceRect -> div [ fill ] []
   InstanceTree st -> oneOrWarning st (lv % pathToLens st) (showTree draggedInst)
   InstanceSong st -> oneOrWarning st (lv % pathToLens st) (song getBounds startDrag ld)
   InstanceInspector st v -> oneOrWarning st (lv % pathToLens st) (inspector draggedInst (lv % pathToLens v))
   where
-    wrap cmp = window cmp startDrag ldw (lis % instWindowState)
+    wrap name cmp = window name cmp startDrag ldw (lis % instWindowState)
 
     fill = style
       [ ("position", "absolute")
