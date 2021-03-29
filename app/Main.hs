@@ -83,17 +83,16 @@ oneOrEmpty l f = state $ \st -> case preview l st of
 -- Shareable -------------------------------------------------------------------
 
 shareable
-  :: StartDrag st
+  :: Env st
   -> IO Bounds
   -> Instance
-  -> Lens' st (Maybe InstanceState)
   -> Props st
-shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dragStarted dragDragging dragDropped
+shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dragStarted dragDragging dragDropped
   where
     dragStarted _ _ = do
       (x, y, w, h) <- liftIO getParentBounds
 
-      modify $ set l $ Just $ InstanceState
+      modify $ set envLDraggedInst $ Just $ InstanceState
         { _instName = "DRAGGED"
         , _instWindowState = WindowState
             { _wndRect = Rect (round x) (round y) (round w) (round h)
@@ -102,94 +101,13 @@ shareable startDrag getParentBounds inst l = onMouseDown $ \e -> startDrag e dra
             }
         , _instInstance = inst
         }
-    dragDragging x y = modify $ set (l % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
-    dragDropped = modify $ set l Nothing
+    dragDragging x y = modify $ set (envLDraggedInst % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
+    dragDropped = modify $ set envLDraggedInst Nothing
 
 -- Window  ---------------------------------------------------------------------
 
-layout :: Lens' st (Maybe InstanceState) -> Component st
-layout l = stateL l $ \draggedInst -> div [ frame draggedInst ] (dropTargets 0)
-  where
-    frame draggedInst = style $ mconcat
-      [ [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0) ]
-      , case draggedInst of
-          Just _ -> []
-          Nothing -> [ ("pointer-events", "none") ]
-      , [ -- ("background-color", "#000")
-        -- , ("opacity", "0.5")
-        ]
-      ]
-
-    dropTargets level
-      | level >= 2 = []
-      -- | level == 2 = [ div [ mid ] [] ]
-      | otherwise = 
-          [ div [ hl ] [ div [ vt ] (dropTargets (level + 1)), div [ vb ] (dropTargets (level + 1)) ]
-          , div [ hr ] [ div [ vt ] (dropTargets (level + 1)), div [ vb ] (dropTargets (level + 1)) ]
-          , div [ mid, onMouseUp $ \_ -> modify $ set (l % _Just % instWindowState % wndRect) (Rect 0 0 100 100) ] []
-          , div [ rl ] []
-          , div [ ll ] []
-          , div [ tl ] []
-          , div [ bl ] []
-          ]
-
-    mid = style
-      [ posAbsolute, left (pct 50), top (pct 50), width (px 48), height (px 48)
-      , ("margin-left", "-24px")
-      , ("margin-top", "-24px")
-      , ("border-radius", "5px")
-      , backgroundColor "#000"
-      , ("opacity", "0.5")
-      ]
-    tl = style
-      [ posAbsolute, left (pct 50), top (pct 50), width (px 48), height (px 24)
-      , ("margin-left", "-24px")
-      , ("margin-top", "-60px")
-      , ("border-radius", "5px")
-      , backgroundColor "#000"
-      , ("opacity", "0.5")
-      ]
-    bl = style
-      [ posAbsolute, left (pct 50), top (pct 50), width (px 48), height (px 24)
-      , ("margin-left", "-24px")
-      , ("margin-top", "36px")
-      , ("border-radius", "5px")
-      , backgroundColor "#000"
-      , ("opacity", "0.5")
-      ]
-    rl = style
-      [ posAbsolute, left (pct 50), top (pct 50), width (px 24), height (px 48)
-      , ("margin-left", "36px")
-      , ("margin-top", "-24px")
-      , ("border-radius", "5px")
-      , backgroundColor "#000"
-      , ("opacity", "0.5")
-      ]
-    ll = style
-      [ posAbsolute, left (pct 50), top (pct 50), width (px 24), height (px 48)
-      , ("margin-left", "-60px")
-      , ("margin-top", "-24px")
-      , ("border-radius", "5px")
-      , backgroundColor "#000"
-      , ("opacity", "0.5")
-      ]
-    hl = style
-      [ posAbsolute, left (px 0), top (px 0), bottom (px 0), right (pct 50)
-      -- , borderRight (solidBorder "#777" 1)
-      ]
-    hr = style
-      [ posAbsolute, left (pct 50), top (px 0), bottom (px 0), right (px 0)
-      ]
-    vt = style
-      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (pct 50)
-      -- , borderBottom (solidBorder "#777" 1)
-      ]
-    vb = style
-      [ posAbsolute, left (px 0), top (pct 50), right (px 0), bottom (px 0)
-      ]
-
-window :: Text -> Component st -> StartDrag st -> Lens' st (Maybe Text) -> Lens' st WindowState -> Component st
-window instName cmp startDrag ldw l = stateL l $ \ws -> div
+window :: Text -> Component st -> StartDrag st -> Lens' st WindowState -> Component st
+window instName cmp startDrag l = stateL l $ \ws -> div
   [ frame ws ]
   [ div
       [ header (_wndTitleBar ws)
@@ -198,18 +116,14 @@ window instName cmp startDrag ldw l = stateL l $ \ws -> div
   , div [ content (_wndTitleBar ws) ] [ cmp ]
   ]
   where
-    dragStarted _ _ = do
-      modify $ set (l % wndDragOffset) (Just origin)
-      modify $ set ldw (Just instName)
+    dragStarted _ _ = modify $ set (l % wndDragOffset) (Just origin)
     dragDragging x y = modify $ set (l % wndDragOffset % _Just) (Point x y)
-    dragDropped = do
-      modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
-        { _wndRect = case offset of
-            Just (Point ox oy) -> Rect (x + ox) (y + oy) w h
-            Nothing -> _wndRect st
-        , _wndDragOffset = Nothing
-        }
-      modify $ set ldw Nothing
+    dragDropped = modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
+      { _wndRect = case offset of
+          Just (Point ox oy) -> Rect (x + ox) (y + oy) w h
+          Nothing -> _wndRect st
+      , _wndDragOffset = Nothing
+      }
 
     frame WindowState {..} = style
       [ ("position", "absolute")
@@ -252,29 +166,19 @@ window instName cmp startDrag ldw l = stateL l $ \ws -> div
 
 -- Instances -------------------------------------------------------------------
 
-windowForInstance
-  :: GetBounds
-  -> StartDrag st
-  -> Lens' st (Maybe Text)
-  -> Lens' st (Maybe InstanceState)
-  -> Lens' st A.Value
-  -> Lens' st InstanceState
+componentForInstance
+  :: Env st
+  -> Instance
   -> Component st
-windowForInstance getBounds startDrag ldw ld lv lis = stateL ld $ \draggedInst -> stateL lis $ \st -> wrap (_instName st) $ case _instInstance st of
+componentForInstance env@(Env {..}) inst = stateL envLDraggedInst $ \draggedInst -> case inst of
   InstanceRect -> div [ fill ] []
-  InstanceTree st -> oneOrWarning st (lv % pathToLens st) (showTree draggedInst)
-  InstanceSong st -> oneOrWarning st (lv % pathToLens st) (song getBounds startDrag ld)
-  InstanceInspector st v -> oneOrWarning st (lv % pathToLens st) (inspector draggedInst (lv % pathToLens v))
+  InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree draggedInst)
+  InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
+  InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector draggedInst (envLValue % pathToLens v))
   where
-    wrap name cmp = window name cmp startDrag ldw (lis % instWindowState)
-
     fill = style
-      [ ("position", "absolute")
-      , ("left", px 0)
-      , ("top", px 0)
-      , ("right", px 0)
-      , ("bottom", px 0)
-      , ("background-color", "#f00")
+      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0)
+      , backgroundColor "#f00"
       ]
 
 -- Tree ------------------------------------------------------------------------
@@ -377,17 +281,12 @@ inspector draggedInst lv l = div
 
 -- Song ------------------------------------------------------------------------
 
-song
-  :: GetBounds
-  -> StartDrag st
-  -> Lens' st (Maybe InstanceState)
-  -> Lens' st SongState
-  -> Component st
-song getBounds startDrag ld l = div []
+song :: Env st -> Lens' st SongState -> Component st
+song env@(Env {..}) lSongState = div []
   [ domPath $ \path -> div [ frame ]
       [ div
           [ dragHandle
-          , shareable startDrag (getBounds path) InstanceRect ld
+          , shareable env (envGetBounds path) InstanceRect
           ] []
       ]
   ]
@@ -409,34 +308,65 @@ song getBounds startDrag ld l = div []
       , ("background-color", "#333")
       ]
 
+-- Layout ----------------------------------------------------------------------
+
+layout
+  :: Env st
+  -> Lens' st LayoutState
+  -> Component st
+layout env lLayoutState = stateL lLayoutState $ \layoutState -> case layoutState of
+  LayoutInstance name inst -> div [ fill ] []
+  LayoutHSplit x _ _ -> div [ fill ]
+    [ div [ hsplitLeft x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) ]
+    , div [ hsplitRight x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) ]
+    ]
+  LayoutVSplit y _ _ -> div [ fill ]
+    [ div [ vsplitTop y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) ]
+    , div [ vsplitBottom y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) ]
+    ]
+  where
+    fill = style [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0) ]
+    hsplitLeft x = style
+      [ posAbsolute, left (px 0), top (px 0), width (px x), bottom (px 0)
+      , borderLeft (solidBorder "#333" 1)
+      ]
+    hsplitRight x = style [ posAbsolute, left (px x), top (px 0), right (px 0), bottom (px 0) ]
+    vsplitTop y = style
+      [ posAbsolute, left (px 0), top (px 0), width (px 0), bottom (px y)
+      , borderBottom (solidBorder "#333" 1)
+      ]
+    vsplitBottom y = style [ posAbsolute, left (px y), top (px 0), width (px 0), bottom (px 0) ]
+
 -- OS --------------------------------------------------------------------------
+
+data Env st = Env
+  { envGetBounds :: GetBounds
+  , envStartDrag :: StartDrag st
+  , envLValue :: Lens' st A.Value
+  , envLDraggedInst :: Lens' st (Maybe InstanceState)
+  }
 
 main :: IO ()
 main = do
   runDefault 3777 "Tree" storeState readStore channels $ \ctx [ddChan, keyChan] ->
-    let drag = startDrag ctx ddChan
-        bounds = getBounds ctx
+    let env = Env
+          { envGetBounds = getBounds ctx
+          , envStartDrag = startDrag ctx ddChan
+          , envLValue = global
+          , envLDraggedInst = draggedInstance
+          }
       in state $ \st -> div [ frame ] $ mconcat
         [ [ div [ style [ ("user-select", "none") ] ] [ text (pack $ show st) ] ]
         -- , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
 
-        -- Instances
-        , [ windowForInstance bounds drag draggedWindow draggedInstance global (toLens (error "at") $ instances % at i % _Just)
-          | (i, _) <- H.toList (_instances st)
-          ]
-
         -- Dragged instance
-        , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance bounds drag draggedWindow draggedInstance global ]
-
-        , if _ctrlPressed st
-            then [ layout (instances % at (fromMaybe "NONE" $ _draggedWindow st)) ]
-            else []
+        -- , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance undefined undefined draggedInstance global ]
         ]
   where
     channels ctx = do
       ddChan <- newTChanIO
       keyChan <- newTChanIO
-      keyEvents ctx (keyDown keyChan) (keyUp keyChan)
+      -- keyEvents ctx (keyDown keyChan) (keyUp keyChan)
       pure [ddChan, keyChan]
       where
         setCtrl v' v e

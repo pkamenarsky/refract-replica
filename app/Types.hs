@@ -30,6 +30,9 @@ import GHC.Generics (Generic)
 toLens :: b -> AffineTraversal' a b -> Lens' a b
 toLens d t = lens (fromMaybe d . preview t) (\a b -> set t b a)
 
+unsafeToLens :: AffineTraversal' a b -> Lens' a b
+unsafeToLens = toLens (error "unsafeToLens")
+
 unsafeIx :: Int -> Lens' [a] a
 unsafeIx x = toLens (error "unsafeIx") $ ix x
 
@@ -211,4 +214,5 @@ makeLenses ''InspectorState
 makeLenses ''NodeState
 makeLenses ''Instance
 makeLenses ''InstanceState
+makePrisms ''LayoutState
 makeLenses ''State
