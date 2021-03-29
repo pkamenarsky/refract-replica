@@ -350,8 +350,8 @@ layout env@(Env {..}) lLayoutState = stateL lLayoutState $ \layoutState -> case 
       bounds <- liftIO getBounds
       modify $ set lLayoutState $ LayoutVSplit 100 (LayoutInstance name inst) defaultLayoutState
       pure (e, bounds)
-    dragDraggedY (e, (_, by, _, bh)) y _ = do
-      modify $ set (lLayoutState % _LayoutVSplit % _1) (round ((fi (mouseClientX e) + fi y - by) * 100.0 / bh))
+    dragDraggedY (e, (_, by, _, bh)) _ y = do
+      modify $ set (lLayoutState % _LayoutVSplit % _1) (round ((fi (mouseClientY e) + fi y - by) * 100.0 / bh))
 
     barSize = 12
 

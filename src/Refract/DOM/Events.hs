@@ -339,7 +339,7 @@ startDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = do
   where
     js = "var drag = function(e) { \n\
         \   callCallback(arg, [e.clientX, e.clientY], true); \n\
-        \   // e.preventDefault(); \n\
+        \   e.preventDefault(); \n\
         \ }; \n\
         \ var up = function(e) { \n\
         \   window.removeEventListener('mousemove', drag); \n\
