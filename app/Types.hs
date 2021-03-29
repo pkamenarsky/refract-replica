@@ -170,6 +170,7 @@ data LayoutState
   = LayoutHSplit Int LayoutState LayoutState
   | LayoutVSplit Int LayoutState LayoutState
   | LayoutInstance Text Instance
+  deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 defaultLayoutState :: LayoutState
 defaultLayoutState = LayoutInstance "Inspector" (InstanceTree [Key "files"])
@@ -178,10 +179,9 @@ defaultLayoutState = LayoutInstance "Inspector" (InstanceTree [Key "files"])
 
 data State = State
   { _draggedInstance :: Maybe InstanceState
-  , _draggedWindow :: Maybe Text
   , _instances :: H.HashMap Text InstanceState
   , _global :: A.Value
-  , _ctrlPressed :: Bool
+  , _layoutState :: LayoutState
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 globalState :: A.Value
@@ -193,7 +193,6 @@ globalState = A.object
 
 defaultState = State
   { _draggedInstance = Nothing
-  , _draggedWindow = Nothing
   , _instances = H.fromList
     [ ("A", InstanceState "A" defaultWindowState (InstanceTree [Key "files"]))
     , ("B", InstanceState "B" defaultWindowState (InstanceTree [Key "files"]))
@@ -201,7 +200,7 @@ defaultState = State
     , ("D", InstanceState "D" defaultWindowState (InstanceInspector [Key "inspector"] []))
     ]
   , _global = globalState
-  , _ctrlPressed = False
+  , _layoutState = defaultLayoutState
   }
 
 -- TH --------------------------------------------------------------------------

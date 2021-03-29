@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main where
@@ -87,7 +88,7 @@ shareable
   -> IO Bounds
   -> Instance
   -> Props st
-shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dragStarted dragDragging dragDropped
+shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dragStarted dragDragged dragDropped
   where
     dragStarted _ _ = do
       (x, y, w, h) <- liftIO getParentBounds
@@ -101,7 +102,7 @@ shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dra
             }
         , _instInstance = inst
         }
-    dragDragging x y = modify $ set (envLDraggedInst % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
+    dragDragged _ x y = modify $ set (envLDraggedInst % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
     dragDropped = modify $ set envLDraggedInst Nothing
 
 -- Window  ---------------------------------------------------------------------
@@ -111,13 +112,13 @@ window instName cmp startDrag l = stateL l $ \ws -> div
   [ frame ws ]
   [ div
       [ header (_wndTitleBar ws)
-      , onMouseDown $ \e -> startDrag e dragStarted dragDragging dragDropped
+      , onMouseDown $ \e -> startDrag e dragStarted dragDragged dragDropped
       ] []
   , div [ content (_wndTitleBar ws) ] [ cmp ]
   ]
   where
     dragStarted _ _ = modify $ set (l % wndDragOffset) (Just origin)
-    dragDragging x y = modify $ set (l % wndDragOffset % _Just) (Point x y)
+    dragDragged _ x y = modify $ set (l % wndDragOffset % _Just) (Point x y)
     dragDropped = modify $ over l $ \st@(WindowState { _wndRect = Rect x y w h, _wndDragOffset = offset}) -> st
       { _wndRect = case offset of
           Just (Point ox oy) -> Rect (x + ox) (y + oy) w h
@@ -224,6 +225,7 @@ showTree draggedInst l = div
           , ("font-family", "Helvetica")
           , ("font-size", "14px")
           , ("line-height", "20px")
+          , ("user-select", "none")
           ]
 
 inspector :: Maybe InstanceState -> AffineTraversal' st A.Value -> Lens' st InspectorState -> Component st
@@ -314,28 +316,66 @@ layout
   :: Env st
   -> Lens' st LayoutState
   -> Component st
-layout env lLayoutState = stateL lLayoutState $ \layoutState -> case layoutState of
-  LayoutInstance name inst -> div [ fill ] []
-  LayoutHSplit x _ _ -> div [ fill ]
+layout env@(Env {..}) lLayoutState = stateL lLayoutState $ \layoutState -> case layoutState of
+  LayoutInstance name inst -> domPath $ \path -> div [ fill 0 ]
+    [ div [ fill barSize ] [ componentForInstance env inst ]
+    , div [ dragBarRight
+          , onMouseDown $ \e -> envStartDrag e (dragStartedX e name inst (envGetBounds path)) dragDraggedX dragFinished
+          ] []
+    , div [ dragBarTop
+          , onMouseDown $ \e -> envStartDrag e (dragStartedY e name inst (envGetBounds path)) dragDraggedY dragFinished
+          ] []
+    ]
+  LayoutHSplit x _ _ -> div [ fill 0 ]
     [ div [ hsplitLeft x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) ]
     , div [ hsplitRight x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) ]
     ]
-  LayoutVSplit y _ _ -> div [ fill ]
+  LayoutVSplit y _ _ -> div [ fill 0 ]
     [ div [ vsplitTop y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) ]
     , div [ vsplitBottom y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) ]
     ]
   where
-    fill = style [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0) ]
+    fi = fromIntegral
+
+    dragStartedX e name inst getBounds _ _ = do
+      bounds <- liftIO getBounds
+      modify $ set lLayoutState $ LayoutHSplit 100 (LayoutInstance name inst) defaultLayoutState
+      pure (e, bounds)
+    dragDraggedX (e, (bx, _, bw, _)) x _ = do
+      -- liftIO $ print (bw, fi (mouseClientX e) + fi x - bx)
+      modify $ set (lLayoutState % _LayoutHSplit % _1) (round ((fi (mouseClientX e) + fi x - bx) * 100.0 / bw))
+    dragFinished = pure ()
+
+    dragStartedY e name inst getBounds _ _ = do
+      bounds <- liftIO getBounds
+      modify $ set lLayoutState $ LayoutVSplit 100 (LayoutInstance name inst) defaultLayoutState
+      pure (e, bounds)
+    dragDraggedY (e, (_, by, _, bh)) y _ = do
+      modify $ set (lLayoutState % _LayoutVSplit % _1) (round ((fi (mouseClientX e) + fi y - by) * 100.0 / bh))
+
+    barSize = 12
+
+    fill v = style [ posAbsolute, left (px 0), top (px v), right (px v), bottom (px 0) ]
+
     hsplitLeft x = style
-      [ posAbsolute, left (px 0), top (px 0), width (px x), bottom (px 0)
+      [ posAbsolute, left (px 0), top (px 0), width (pct x), bottom (px 0)
       , borderLeft (solidBorder "#333" 1)
       ]
-    hsplitRight x = style [ posAbsolute, left (px x), top (px 0), right (px 0), bottom (px 0) ]
+    hsplitRight x = style [ posAbsolute, left (pct x), top (px 0), right (px 0), bottom (px 0) ]
     vsplitTop y = style
-      [ posAbsolute, left (px 0), top (px 0), width (px 0), bottom (px y)
+      [ posAbsolute, left (px 0), top (px 0), right (px 0), height (pct y)
       , borderBottom (solidBorder "#333" 1)
       ]
-    vsplitBottom y = style [ posAbsolute, left (px y), top (px 0), width (px 0), bottom (px 0) ]
+    vsplitBottom y = style [ posAbsolute, left (px 0), top (pct y), right (px 0), bottom (px 0) ]
+
+    dragBarRight = style
+      [ posAbsolute, top (px 0), right (px 0), width (px barSize), bottom (px 0)
+      , backgroundColor "#333"
+      ]
+    dragBarTop = style
+      [ posAbsolute, top (px 0), left (px 0), height (px barSize), right (px 0)
+      , backgroundColor "#333"
+      ]
 
 -- OS --------------------------------------------------------------------------
 
@@ -356,11 +396,13 @@ main = do
           , envLDraggedInst = draggedInstance
           }
       in state $ \st -> div [ frame ] $ mconcat
-        [ [ div [ style [ ("user-select", "none") ] ] [ text (pack $ show st) ] ]
+        [ []
+        -- , [ div [ style [ ("user-select", "none") ] ] [ text (pack $ show st) ] ]
         -- , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
 
         -- Dragged instance
         -- , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance undefined undefined draggedInstance global ]
+        , [ layout env layoutState ]
         ]
   where
     channels ctx = do
@@ -373,8 +415,8 @@ main = do
           | kbdKey e == "Alt" = v
           | otherwise = v'
 
-        keyDown keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) True e })
-        keyUp keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) False e })
+        -- keyDown keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) True e })
+        -- keyUp keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) False e })
 
     frame = style []
       -- [ ("backgroundColor", "#bbb")

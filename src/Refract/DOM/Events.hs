@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Refract.DOM.Events where
 
@@ -6,6 +7,7 @@ import           Control.Monad.Fix            (mfix)
 import           Control.Monad.IO.Class       (liftIO)
 import qualified Control.Monad.Trans.State as ST
 
+import           Control.Concurrent.MVar
 import           Control.Concurrent.STM       (atomically)
 import           Control.Concurrent.STM.TChan (TChan, writeTChan)
 
@@ -13,6 +15,7 @@ import           Refract.DOM.Props            (Props(Props), Prop(PropEvent))
 
 import           Data.Aeson                   ((.:), (.:?))
 import qualified Data.Aeson                as A
+import           Data.IORef
 
 import qualified Data.Text                 as T
 
@@ -291,39 +294,6 @@ onDragWithOptions opts f = Props "onDrag" (PropEvent opts (f . extractResult . A
 
 --------------------------------------------------------------------------------
 
-data DragState = DragStarted Int Int | DragDragged Int Int | DragNone
-  deriving (Eq, Show)
-
-dragAndDrop :: R.Context -> (DragState -> IO ()) -> MouseEvent -> IO ()
-dragAndDrop ctx cb event = do
-  jsCb <- mfix $ \jsCb -> do
-    jsCb <- R.registerCallback ctx (dragged jsCb)
-    pure jsCb
-
-  cb (DragStarted 0 0)
-
-  R.call ctx jsCb js
-  where
-    js = "var drag = function(e) { \n\
-        \   callCallback(arg, [e.clientX, e.clientY], true); \n\
-        \ }; \n\
-        \ var up = function(e) { \n\
-        \   window.removeEventListener('mousemove', drag); \n\
-        \   window.removeEventListener('mouseup', up); \n\
-        \   callCallback(arg, null, true); \n\
-        \ }; \n\
-        \ window.addEventListener('mousemove', drag); \n\
-        \ window.addEventListener('mouseup', up); \n\
-        \"
-
-    dragged :: R.Callback -> Maybe (Int, Int) -> IO ()
-    dragged jsCb xy@Nothing = do
-      R.unregisterCallback ctx jsCb
-      cb DragNone
-    dragged jsCb xy@(Just (x, y)) = cb $ DragDragged
-      (x - mouseClientX event)
-      (y - mouseClientY event)
-
 keyEvents :: R.Context -> (KeyboardEvent -> IO ()) -> (KeyboardEvent -> IO ()) -> IO ()
 keyEvents ctx keyDown keyUp = do
   jsKeyDownCb <- R.registerCallback ctx keyDown
@@ -343,22 +313,50 @@ keyEvents ctx keyDown keyUp = do
         \ window.addEventListener('keyup', keyup); \n\
         \"
 
-type StartDrag st = 
+type StartDrag st = forall a.
      MouseEvent
-  -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragStarted
-  -> (Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
-  -> ST.StateT st IO () -- ^ dragFinished
+  -> (Int -> Int -> ST.StateT st IO a) -- ^ dragStarted
+  -> (a -> Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
+  -> (ST.StateT st IO ()) -- ^ dragFinished
   -> ST.StateT st IO ()
 
 startDrag
   :: R.Context
   -> TChan (st -> IO st) -- ^ setState
   -> StartDrag st
-startDrag ctx modStCh mouseEvent started dragged finished
-  = liftIO $ dragAndDrop ctx writeState mouseEvent
-  where
-    action (DragStarted x y) = started x y
-    action (DragDragged x y) = dragged x y
-    action DragNone = finished
+startDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = do
+  ref <- liftIO $ newIORef undefined
 
-    writeState ds = atomically $ writeTChan modStCh $ ST.execStateT (action ds)
+  jsCb <- liftIO $ mfix $ \jsCb -> do
+    jsCb <- R.registerCallback ctx (dragged ref jsCb)
+    pure jsCb
+
+  liftIO $ writeState $ do
+    a <- dragStarted 0 0
+    liftIO $ writeIORef ref a
+
+  liftIO $ R.call ctx jsCb js
+  where
+    js = "var drag = function(e) { \n\
+        \   callCallback(arg, [e.clientX, e.clientY], true); \n\
+        \   // e.preventDefault(); \n\
+        \ }; \n\
+        \ var up = function(e) { \n\
+        \   window.removeEventListener('mousemove', drag); \n\
+        \   window.removeEventListener('mouseup', up); \n\
+        \   callCallback(arg, null, true); \n\
+        \ }; \n\
+        \ window.addEventListener('mousemove', drag); \n\
+        \ window.addEventListener('mouseup', up); \n\
+        \"
+
+    dragged _ jsCb xy@Nothing = do
+      liftIO $ R.unregisterCallback ctx jsCb
+      writeState dragFinished
+    dragged ref jsCb xy@(Just (x, y)) = writeState $ do
+      a <- liftIO $ readIORef ref
+      dragDragged a
+        (x - mouseClientX mouseEvent)
+        (y - mouseClientY mouseEvent)
+
+    writeState ds = atomically $ writeTChan modStCh $ ST.execStateT ds
