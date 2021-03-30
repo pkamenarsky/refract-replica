@@ -317,8 +317,8 @@ layout
   -> Lens' st LayoutState
   -> Component st
 layout env@(Env {..}) lLayoutState = stateL lLayoutState $ \layoutState -> case layoutState of
-  LayoutInstance name inst -> domPath $ \path -> div [ fill 0 ]
-    [ div [ fill barSize ] [ componentForInstance env inst ]
+  LayoutInstance name inst -> domPath $ \path -> div [ fill 0 False ]
+    [ div [ fill barSize True ] [ componentForInstance env inst ]
     , div [ dragBarRight
           , onMouseDown $ \e -> envStartDrag e (dragStartedX e name inst (envGetBounds path)) dragDraggedX dragFinished
           ] []
@@ -326,11 +326,11 @@ layout env@(Env {..}) lLayoutState = stateL lLayoutState $ \layoutState -> case 
           , onMouseDown $ \e -> envStartDrag e (dragStartedY e name inst (envGetBounds path)) dragDraggedY dragFinished
           ] []
     ]
-  LayoutHSplit x _ _ -> div [ fill 0 ]
+  LayoutHSplit x _ _ -> div [ fill 0 False ]
     [ div [ hsplitLeft x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) ]
     , div [ hsplitRight x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) ]
     ]
-  LayoutVSplit y _ _ -> div [ fill 0 ]
+  LayoutVSplit y _ _ -> div [ fill 0 False ]
     [ div [ vsplitTop y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) ]
     , div [ vsplitBottom y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) ]
     ]
@@ -354,27 +354,31 @@ layout env@(Env {..}) lLayoutState = stateL lLayoutState $ \layoutState -> case 
       modify $ set (lLayoutState % _LayoutVSplit % _1) (round ((fi (mouseClientY e) + fi y - by) * 100.0 / bh))
 
     barSize = 12
+    barColor = "#aaa"
 
-    fill v = style [ posAbsolute, left (px 0), top (px v), right (px v), bottom (px 0) ]
+    fill v overflow = style
+      [ posAbsolute, left (px 0), top (px v), right (px v), bottom (px 0)
+      , ("overflow", if overflow then "auto" else "hidden")
+      ]
 
     hsplitLeft x = style
       [ posAbsolute, left (px 0), top (px 0), width (pct x), bottom (px 0)
-      , borderLeft (solidBorder "#333" 1)
+      , borderLeft (solidBorder barColor 1)
       ]
     hsplitRight x = style [ posAbsolute, left (pct x), top (px 0), right (px 0), bottom (px 0) ]
     vsplitTop y = style
       [ posAbsolute, left (px 0), top (px 0), right (px 0), height (pct y)
-      , borderBottom (solidBorder "#333" 1)
+      , borderBottom (solidBorder barColor 1)
       ]
     vsplitBottom y = style [ posAbsolute, left (px 0), top (pct y), right (px 0), bottom (px 0) ]
 
     dragBarRight = style
       [ posAbsolute, top (px 0), right (px 0), width (px barSize), bottom (px 0)
-      , backgroundColor "#333"
+      , backgroundColor barColor
       ]
     dragBarTop = style
       [ posAbsolute, top (px 0), left (px 0), height (px barSize), right (px 0)
-      , backgroundColor "#333"
+      , backgroundColor barColor
       ]
 
 -- OS --------------------------------------------------------------------------
@@ -418,7 +422,7 @@ main = do
         -- keyDown keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) True e })
         -- keyUp keyChan e = atomically $ writeTChan keyChan (\st -> pure $ st { _ctrlPressed = setCtrl (_ctrlPressed st) False e })
 
-    frame = style []
+    frame = style [ ("overflow", "hidden") ]
       -- [ ("backgroundColor", "#bbb")
       -- , ("width", "100%")
       -- , ("height", "1000px")
