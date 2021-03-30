@@ -52,6 +52,12 @@ width v = ("width", v)
 height :: Text -> (Text, Text)
 height v = ("height", v)
 
+marginLeft :: Text -> (Text, Text)
+marginLeft v = ("margin-left", v)
+
+marginTop :: Text -> (Text, Text)
+marginTop v = ("margin-left", v)
+
 --------------------------------------------------------------------------------
 
 color :: Text -> (Text, Text)

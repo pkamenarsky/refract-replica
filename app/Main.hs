@@ -56,6 +56,10 @@ import Layout
 import Types
 
 import Prelude hiding (div, span)
+import qualified Prelude
+
+div' :: Int -> Int -> Int
+div' = Prelude.div
 
 stateL :: Lens' st a -> (a -> Component st) -> Component st
 stateL l f = state $ \st -> f (view l st)
@@ -317,38 +321,81 @@ layout
   -> Lens' st LayoutState
   -> Component st
 layout env@(Env {..}) lLayoutState = stateL lLayoutState $ \layoutState -> case layoutState of
-  LayoutInstance name inst -> domPath $ \path -> div [ fill 0 False ]
-    [ div [ fill barSize True ] [ componentForInstance env inst ]
-    , div [ dragBarRight
-          , onMouseDown $ \e -> envStartDrag e (dragStartedX e name inst (envGetBounds path)) dragDraggedX dragFinished
-          ] []
-    , div [ dragBarTop
-          , onMouseDown $ \e -> envStartDrag e (dragStartedY e name inst (envGetBounds path)) dragDraggedY dragFinished
-          ] []
+  LayoutInstance name inst -> domPath $ \path -> div [ fill 0 0 False ]
+    [ div [ fill 0 0 True ] [ componentForInstance env inst ]
+    , div
+        [ dragHandleRight
+        , onMouseDown $ \e -> envStartDrag e (dragStartedSplitX e name inst (envGetBounds path)) dragDraggedX dragFinished
+        ] []
+    , div
+        [ dragHandleTop
+        , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY e name inst (envGetBounds path)) dragDraggedY dragFinished
+        ] []
     ]
-  LayoutHSplit x _ _ -> div [ fill 0 False ]
-    [ div [ hsplitLeft x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) ]
-    , div [ hsplitRight x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) ]
+  LayoutHSplit x left right -> domPath $ \path -> div [ fill 0 0 False ]
+    [ div [ hsplitLeft x ]
+      [ div [ fill barSize 0 False ]
+          [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _2)
+          , div
+              [ closeButton
+              , onClick $ \_ -> modify $ set lLayoutState right
+              ] []
+          ]
+      , div
+          [ dragBarRight
+          , onMouseDown $ \e -> envStartDrag e (dragStartedX e (envGetBounds path)) dragDraggedX dragFinished
+          ] []
+      ]
+    , div [ hsplitRight x ]
+        [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _3)
+        , div
+            [ closeButton
+            , onClick $ \_ -> modify $ set lLayoutState left
+            ] []
+        ]
     ]
-  LayoutVSplit y _ _ -> div [ fill 0 False ]
-    [ div [ vsplitTop y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) ]
-    , div [ vsplitBottom y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) ]
+  LayoutVSplit y top bottom -> domPath $ \path -> div [ fill 0 0 False ]
+    [ div [ vsplitTop y ]
+        [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _2)
+        , div
+            [ closeButton
+            , onClick $ \_ -> modify $ set lLayoutState bottom
+            ] []
+        ]
+    , div [ vsplitBottom y ]
+        [ div [ fill 0 barSize False ]
+            [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _3)
+            , div
+                [ closeButton
+                , onClick $ \_ -> modify $ set lLayoutState top
+                ] []
+            ]
+        , div
+            [ dragBarTop
+            , onMouseDown $ \e -> envStartDrag e (dragStartedY e (envGetBounds path)) dragDraggedY dragFinished
+            ] []
+        ]
     ]
   where
     fi = fromIntegral
 
-    dragStartedX e name inst getBounds _ _ = do
+    dragStartedSplitX e name inst getBounds _ _ = do
       bounds <- liftIO getBounds
       modify $ set lLayoutState $ LayoutHSplit 100 (LayoutInstance name inst) defaultLayoutState
       pure (e, bounds)
+    dragStartedX e getBounds _ _ = do
+      bounds <- liftIO getBounds
+      pure (e, bounds)
     dragDraggedX (e, (bx, _, bw, _)) x _ = do
-      -- liftIO $ print (bw, fi (mouseClientX e) + fi x - bx)
       modify $ set (lLayoutState % _LayoutHSplit % _1) (round ((fi (mouseClientX e) + fi x - bx) * 100.0 / bw))
     dragFinished = pure ()
 
-    dragStartedY e name inst getBounds _ _ = do
+    dragStartedSplitY e name inst getBounds _ _ = do
       bounds <- liftIO getBounds
       modify $ set lLayoutState $ LayoutVSplit 100 (LayoutInstance name inst) defaultLayoutState
+      pure (e, bounds)
+    dragStartedY e getBounds _ _ = do
+      bounds <- liftIO getBounds
       pure (e, bounds)
     dragDraggedY (e, (_, by, _, bh)) _ y = do
       modify $ set (lLayoutState % _LayoutVSplit % _1) (round ((fi (mouseClientY e) + fi y - by) * 100.0 / bh))
@@ -356,8 +403,8 @@ layout env@(Env {..}) lLayoutState = stateL lLayoutState $ \layoutState -> case 
     barSize = 12
     barColor = "#aaa"
 
-    fill v overflow = style
-      [ posAbsolute, left (px 0), top (px v), right (px v), bottom (px 0)
+    fill x y overflow = style
+      [ posAbsolute, left (px 0), top (px y), right (px x), bottom (px 0)
       , ("overflow", if overflow then "auto" else "hidden")
       ]
 
@@ -378,6 +425,23 @@ layout env@(Env {..}) lLayoutState = stateL lLayoutState $ \layoutState -> case 
       ]
     dragBarTop = style
       [ posAbsolute, top (px 0), left (px 0), height (px barSize), right (px 0)
+      , backgroundColor barColor
+      ]
+
+    handleSize = 24
+
+    dragHandleRight = style
+      [ posAbsolute, top (pct 50), right (px 0), width (px handleSize), height (px handleSize)
+      , marginTop (px (-handleSize `div'` 2))
+      , backgroundColor barColor
+      ]
+    dragHandleTop = style
+      [ posAbsolute, top (px 0), left (pct 50), width (px handleSize), height (px handleSize)
+      , marginLeft (px (-handleSize `div'` 2))
+      , backgroundColor barColor
+      ]
+    closeButton = style
+      [ posAbsolute, top (px 0), right (px 0), width (px handleSize), height (px handleSize)
       , backgroundColor barColor
       ]
 
