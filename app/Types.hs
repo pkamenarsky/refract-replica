@@ -167,8 +167,8 @@ defaultInstanceState = InstanceState
   }
 
 data LayoutState
-  = LayoutHSplit Int LayoutState LayoutState
-  | LayoutVSplit Int LayoutState LayoutState
+  = LayoutHSplit Double LayoutState LayoutState
+  | LayoutVSplit Double LayoutState LayoutState
   | LayoutInstance Text Instance
   deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
