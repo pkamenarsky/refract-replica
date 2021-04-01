@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b3ae4a0130e82f06a34a5916f492741b8b1c91564fb9ed58a41b89a9289f6133
+-- hash: 709a950733ca84fcfc7b223f868d3957e7fcdbe69d5ffc8c0d5f7f40e4abbf6e
 
 name:           refract-replica
 version:        0.1.0.0
@@ -66,6 +66,7 @@ executable refract-replica-exe
     , containers
     , foreign-store
     , optics
+    , pretty-simple
     , refract-replica
     , replica
     , stm

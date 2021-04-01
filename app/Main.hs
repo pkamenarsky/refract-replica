@@ -25,6 +25,7 @@ import qualified Data.HashMap.Strict as H
 import qualified Data.HashSet as HS
 import Data.Text (Text, pack)
 import Data.Text.Encoding (decodeUtf8)
+import Data.Text.Lazy (toStrict)
 import Data.Tuple.Optics
 import Data.Maybe (fromMaybe, isJust)
 import Data.Maybe.Optics
@@ -46,6 +47,8 @@ import Refract.DOM.Events
 import Refract.DOM.Props hiding (width, height)
 import Refract.DOM
 import Refract
+
+import Text.Pretty.Simple (pShowNoColor)
 
 import GHC.Generics (Generic)
 
@@ -323,7 +326,7 @@ layout
   -> Component st
 layout env@(Env {..}) tempLs lLayoutState = stateL lLayoutState $ \layoutState -> case layoutState of
   LayoutInstance name inst -> domPath $ \path -> div [ fill 0 0 False ]
-    [ div [ fill 0 0 True ] [ {- componentForInstance env inst -} text $ pack (show $ handlesForLayout tempLs) ]
+    [ div [ fill 0 0 True ] [ {- componentForInstance env inst -} pre [ style [ ("user-select", "none") ] ] [ text $ toStrict $ pShowNoColor (handlesForLayout' tempLs) ] ]
     , div
         [ dragHandleRight
         , onMouseDown $ \e -> envStartDrag e (dragStartedSplitX e name inst (envGetBounds path)) dragDraggedX dragFinished
@@ -430,20 +433,21 @@ layout env@(Env {..}) tempLs lLayoutState = stateL lLayoutState $ \layoutState -
       ]
 
     handleSize = 24
+    handleColor = "#333"
 
     dragHandleRight = style
       [ posAbsolute, top (pct 50), right (px 0), width (px handleSize), height (px handleSize)
       , marginTop (px (-handleSize `div'` 2))
-      , backgroundColor barColor
+      , backgroundColor handleColor
       ]
     dragHandleTop = style
       [ posAbsolute, top (px 0), left (pct 50), width (px handleSize), height (px handleSize)
       , marginLeft (px (-handleSize `div'` 2))
-      , backgroundColor barColor
+      , backgroundColor handleColor
       ]
     closeButton = style
       [ posAbsolute, top (px 0), right (px 0), width (px handleSize), height (px handleSize)
-      , backgroundColor barColor
+      , backgroundColor handleColor
       ]
 
 data Node = HNode [Double] Node Node | VNode [Double] Node Node | INode
@@ -451,22 +455,27 @@ data Node = HNode [Double] Node Node | VNode [Double] Node Node | INode
 
 handlesForLayout :: LayoutState -> (Node, [(LayoutState, Double)], [(LayoutState, Double)])
 handlesForLayout (LayoutInstance _ _) = (INode, [], [])
-handlesForLayout (LayoutHSplit x left right) =
-  (HNode (map snd rightHandles <> [x]) leftNode rightNode
-  , [ (st, x * tx) | (st, tx) <- leftTops ] <> [ (st, (100.0 - x) * tx + x) | (st, tx) <- rightTops ]
+handlesForLayout lst@(LayoutHSplit x left right) =
+  ( HNode (map snd leftRights) leftNode rightNode
+  , (lst, x):[ (st, x * tx / 100.0) | (st, tx) <- leftTops ] <> [ (st, (100.0 - x) * tx / 100.0 + x) | (st, tx) <- rightTops ]
   , rightRights
   )
   where
-    (leftNode, leftTops, rightHandles) = handlesForLayout left
+    (leftNode, leftTops, leftRights) = handlesForLayout left
     (rightNode, rightTops, rightRights) = handlesForLayout right
-handlesForLayout (LayoutVSplit y top bottom) =
-  (VNode (map snd topHandles <> [y]) topNode bottomNode
-  , [ (st, y * ty) | (st, ty) <- topRights ] <> [ (st, (100.0 - y) * ty + y) | (st, ty) <- bottomRights ]
+handlesForLayout lst@(LayoutVSplit y top bottom) =
+  ( VNode (map snd bottomTops) topNode bottomNode
   , topTops
+  , (lst, y):[ (st, y * ty / 100.0) | (st, ty) <- topRights ] <> [ (st, (100.0 - y) * ty / 100.0 + y) | (st, ty) <- bottomRights ]
   )
   where
     (topNode, topTops, topRights) = handlesForLayout top
-    (bottomNode, topHandles, bottomRights) = handlesForLayout bottom
+    (bottomNode, bottomTops, bottomRights) = handlesForLayout bottom
+
+handlesForLayout' :: LayoutState -> (Node, [Double], [Double])
+handlesForLayout' lst = (node, map snd tops, map snd rights)
+  where
+    (node, tops, rights) = handlesForLayout lst
 
 -- OS --------------------------------------------------------------------------
 

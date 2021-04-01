@@ -49,6 +49,7 @@ executables:
     - bytestring
     - foreign-store
     - optics
+    - pretty-simple
     - unordered-containers
     - vector
 
