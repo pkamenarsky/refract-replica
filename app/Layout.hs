@@ -7,7 +7,7 @@ import Data.Text (Text, pack)
 px :: Int -> Text
 px x = pack (show x) <> "px"
 
-pct :: Int -> Text
+pct :: Double -> Text
 pct x = pack (show x) <> "%"
 
 posAbsolute :: (Text, Text)

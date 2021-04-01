@@ -322,11 +322,12 @@ song env@(Env {..}) lSongState = div []
 layout
   :: Env st
   -> LayoutState
+  -> Node
   -> Lens' st LayoutState
   -> Component st
-layout env@(Env {..}) tempLs lLayoutState = stateL lLayoutState $ \layoutState -> case layoutState of
-  LayoutInstance name inst -> domPath $ \path -> div [ fill 0 0 False ]
-    [ div [ fill 0 0 True ] [ {- componentForInstance env inst -} pre [ style [ ("user-select", "none") ] ] [ text $ toStrict $ pShowNoColor (handlesForLayout' tempLs) ] ]
+layout env@(Env {..}) tempLs node lLayoutState = stateL lLayoutState $ \layoutState -> case (layoutState, node) of
+  (LayoutInstance name inst, _) -> domPath $ \path -> div [ fill 0 0 False ]
+    [ div [ fill barSize barSize True ] [ {- componentForInstance env inst -} pre [ style [ ("user-select", "none") ] ] [ text $ toStrict $ pShowNoColor (handlesForLayout' tempLs) ] ]
     , div
         [ dragHandleRight
         , onMouseDown $ \e -> envStartDrag e (dragStartedSplitX e name inst (envGetBounds path)) dragDraggedX dragFinished
@@ -336,48 +337,58 @@ layout env@(Env {..}) tempLs lLayoutState = stateL lLayoutState $ \layoutState -
         , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY e name inst (envGetBounds path)) dragDraggedY dragFinished
         ] []
     ]
-  LayoutHSplit x left right -> domPath $ \path -> div [ fill 0 0 False ]
+  (LayoutHSplit x leftLayout rightLayout, HNode ys leftNode rightNode) -> domPath $ \path -> div [ fill 0 0 False ]
     [ div [ hsplitLeft x ]
-      [ div [ fill barSize 0 False ]
-          [ layout env tempLs (unsafeToLens $ lLayoutState % _LayoutHSplit % _2)
+      [ div [ fill 0 0 False ]
+          [ layout env tempLs leftNode (unsafeToLens $ lLayoutState % _LayoutHSplit % _2)
           , div
               [ closeButton
-              , onClick $ \_ -> modify $ set lLayoutState right
+              , onClick $ \_ -> modify $ set lLayoutState rightLayout
               ] []
           ]
       , div
           [ dragBarRight
           , onMouseDown $ \e -> envStartDrag e (dragStartedX e (envGetBounds path)) dragDraggedX dragFinished
-          ] []
+          ]
+          [ div
+              [ style [ posAbsolute, top (pct y), left (px 0), right (px 0), height (px barSize), backgroundColor "#f00" ] ]
+              []
+          | y <- ys
+          ]
       ]
     , div [ hsplitRight x ]
-        [ layout env tempLs (unsafeToLens $ lLayoutState % _LayoutHSplit % _3)
+        [ layout env tempLs rightNode (unsafeToLens $ lLayoutState % _LayoutHSplit % _3)
         , div
             [ closeButton
-            , onClick $ \_ -> modify $ set lLayoutState left
+            , onClick $ \_ -> modify $ set lLayoutState leftLayout
             ] []
         ]
     ]
-  LayoutVSplit y top bottom -> domPath $ \path -> div [ fill 0 0 False ]
+  (LayoutVSplit y topLayout bottomLayout, VNode xs topNode bottomNode) -> domPath $ \path -> div [ fill 0 0 False ]
     [ div [ vsplitTop y ]
-        [ layout env tempLs (unsafeToLens $ lLayoutState % _LayoutVSplit % _2)
+        [ layout env tempLs topNode (unsafeToLens $ lLayoutState % _LayoutVSplit % _2)
         , div
             [ closeButton
-            , onClick $ \_ -> modify $ set lLayoutState bottom
+            , onClick $ \_ -> modify $ set lLayoutState bottomLayout
             ] []
         ]
     , div [ vsplitBottom y ]
-        [ div [ fill 0 barSize False ]
-            [ layout env tempLs (unsafeToLens $ lLayoutState % _LayoutVSplit % _3)
+        [ div [ fill 0 0 False ]
+            [ layout env tempLs bottomNode (unsafeToLens $ lLayoutState % _LayoutVSplit % _3)
             , div
                 [ closeButton
-                , onClick $ \_ -> modify $ set lLayoutState top
+                , onClick $ \_ -> modify $ set lLayoutState topLayout
                 ] []
             ]
         , div
             [ dragBarTop
             , onMouseDown $ \e -> envStartDrag e (dragStartedY e (envGetBounds path)) dragDraggedY dragFinished
-            ] []
+            ]
+            [ div
+                [ style [ posAbsolute, top (px 0), bottom (px 0), left (pct x), width (px barSize), marginLeft (px (-barSize `div'` 1)), backgroundColor "#f00" ] ]
+                []
+            | x <- xs
+            ]
         ]
     ]
   where
@@ -391,7 +402,7 @@ layout env@(Env {..}) tempLs lLayoutState = stateL lLayoutState $ \layoutState -
       bounds <- liftIO getBounds
       pure (e, bounds)
     dragDraggedX (e, (bx, _, bw, _)) x _ = do
-      modify $ set (lLayoutState % _LayoutHSplit % _1) ((fi (mouseClientX e) + fi x - bx) * 100.0 / bw)
+      modify $ set (lLayoutState % _LayoutHSplit % _1) ((fi (mouseClientX e + x) - bx) * 100.0 / bw)
     dragFinished = pure ()
 
     dragStartedSplitY e name inst getBounds _ _ = do
@@ -402,7 +413,7 @@ layout env@(Env {..}) tempLs lLayoutState = stateL lLayoutState $ \layoutState -
       bounds <- liftIO getBounds
       pure (e, bounds)
     dragDraggedY (e, (_, by, _, bh)) _ y = do
-      modify $ set (lLayoutState % _LayoutVSplit % _1) ((fi (mouseClientY e) + fi y - by) * 100.0 / bh)
+      modify $ set (lLayoutState % _LayoutVSplit % _1) ((fi (mouseClientY e + y) - by) * 100.0 / bh)
 
     barSize = 12
     barColor = "#aaa"
@@ -413,15 +424,15 @@ layout env@(Env {..}) tempLs lLayoutState = stateL lLayoutState $ \layoutState -
       ]
 
     hsplitLeft x = style
-      [ posAbsolute, left (px 0), top (px 0), width (pct $ round x), bottom (px 0)
+      [ posAbsolute, left (px 0), top (px 0), width (pct x), bottom (px 0)
       , borderLeft (solidBorder barColor 1)
       ]
-    hsplitRight x = style [ posAbsolute, left (pct $ round x), top (px 0), right (px 0), bottom (px 0) ]
+    hsplitRight x = style [ posAbsolute, left (pct x), top (px 0), right (px 0), bottom (px 0) ]
     vsplitTop y = style
-      [ posAbsolute, left (px 0), top (px 0), right (px 0), height (pct $ round y)
+      [ posAbsolute, left (px 0), top (px 0), right (px 0), height (pct y)
       , borderBottom (solidBorder barColor 1)
       ]
-    vsplitBottom y = style [ posAbsolute, left (px 0), top (pct $ round y), right (px 0), bottom (px 0) ]
+    vsplitBottom y = style [ posAbsolute, left (px 0), top (pct y), right (px 0), bottom (px 0) ]
 
     dragBarRight = style
       [ posAbsolute, top (px 0), right (px 0), width (px barSize), bottom (px 0)
@@ -436,17 +447,17 @@ layout env@(Env {..}) tempLs lLayoutState = stateL lLayoutState $ \layoutState -
     handleColor = "#333"
 
     dragHandleRight = style
-      [ posAbsolute, top (pct 50), right (px 0), width (px handleSize), height (px handleSize)
+      [ posAbsolute, top (pct 50), right (px barSize), width (px handleSize), height (px handleSize)
       , marginTop (px (-handleSize `div'` 2))
       , backgroundColor handleColor
       ]
     dragHandleTop = style
-      [ posAbsolute, top (px 0), left (pct 50), width (px handleSize), height (px handleSize)
+      [ posAbsolute, top (px barSize), left (pct 50), width (px handleSize), height (px handleSize)
       , marginLeft (px (-handleSize `div'` 2))
       , backgroundColor handleColor
       ]
     closeButton = style
-      [ posAbsolute, top (px 0), right (px 0), width (px handleSize), height (px handleSize)
+      [ posAbsolute, top (px barSize), right (px barSize), width (px handleSize), height (px handleSize)
       , backgroundColor handleColor
       ]
 
@@ -495,14 +506,15 @@ main = do
           , envLValue = global
           , envLDraggedInst = draggedInstance
           }
-      in state $ \st -> div [ frame ] $ mconcat
+      in state $ \st ->
+      let (node, _, _) = handlesForLayout (_layoutState st) in div [ frame ] $ mconcat
         [ []
         -- , [ div [ style [ ("user-select", "none") ] ] [ text (pack $ show st) ] ]
         -- , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
 
         -- Dragged instance
         -- , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance undefined undefined draggedInstance global ]
-        , [ layout env (_layoutState st) layoutState ]
+        , [ layout env (_layoutState st) node layoutState ]
         ]
   where
     channels ctx = do
