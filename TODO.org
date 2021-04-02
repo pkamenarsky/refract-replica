@@ -1,0 +1,2 @@
+* TODO memoize VDOM with static functions
+* TODO CSS DSL
