@@ -326,7 +326,7 @@ layout'
   -> Maybe (Lens' st LayoutState, IO (Double, Double, Double, Double))
   -> Lens' st LayoutState
   -> Component st
-layout' env@(Env {..}) tempLs lRightNeighbor lTopNeighbor lLayoutState = state $ \st -> stateL lLayoutState $ \layoutState -> case layoutState of
+layout' env@(Env {..}) parent lRightNeighbor lTopNeighbor lLayoutState = state $ \st -> stateL lLayoutState $ \layoutState -> case layoutState of
   LayoutInstance name inst -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
     [ [ div [ fill barSize barSize True ] [] ] -- [ {- componentForInstance env inst -} pre [ style [ ("user-select", "none") ] ] [ text $ toStrict $ pShowNoColor (handlesForLayout' tempLs) ] ]
 
@@ -356,17 +356,24 @@ layout' env@(Env {..}) tempLs lRightNeighbor lTopNeighbor lLayoutState = state $
           ] []
       , div
           [ dragHandleTop
-          , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY e name inst (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished
+          , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY st lLayoutState e (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished
           ] []
+      , flip div [] $ mconcat
+          [ [ dragHandleCorner ]
+          , case parent of
+              LayoutHSplit _ _ _ -> [ onMouseDown $ \e -> envStartDrag e (dragStartedSplitY st lLayoutState e (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished ]
+              LayoutVSplit _ _ _ -> [ onMouseDown $ \e -> envStartDrag e (dragStartedSplitX st lLayoutState e (envGetBounds path)) (dragDraggedX lLayoutState) dragFinished ]
+              _ -> []
+          ]
       ]
     ]
   LayoutHSplit x leftLayout rightLayout -> domPath $ \path -> div [ fill 0 0 False ]
-    [ div [ hsplitLeft x ] [ layout' env tempLs (Just (lLayoutState, envGetBounds path)) lTopNeighbor (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) ]
-    , div [ hsplitRight x ] [ layout' env tempLs lRightNeighbor lTopNeighbor (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) ]
+    [ div [ hsplitLeft x ] [ layout' env layoutState (Just (lLayoutState, envGetBounds path)) lTopNeighbor (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) ]
+    , div [ hsplitRight x ] [ layout' env layoutState lRightNeighbor lTopNeighbor (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) ]
     ]
   LayoutVSplit y topLayout bottomLayout -> domPath $ \path -> div [ fill 0 0 False ]
-    [ div [ vsplitTop y ] [ layout' env tempLs lRightNeighbor lTopNeighbor (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) ]
-    , div [ vsplitBottom y ] [ layout' env tempLs lRightNeighbor (Just (lLayoutState, envGetBounds path)) (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) ]
+    [ div [ vsplitTop y ] [ layout' env layoutState lRightNeighbor lTopNeighbor (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) ]
+    , div [ vsplitBottom y ] [ layout' env layoutState lRightNeighbor (Just (lLayoutState, envGetBounds path)) (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) ]
     ]
   where
     fi = fromIntegral
@@ -382,9 +389,9 @@ layout' env@(Env {..}) tempLs lRightNeighbor lTopNeighbor lLayoutState = state $
       modify $ set (l % _LayoutHSplit % _1) ((fi (mouseClientX e + x) - bx) * 100.0 / bw)
     dragFinished = pure ()
 
-    dragStartedSplitY e name inst getBounds _ _ = do
+    dragStartedSplitY st l e getBounds _ _ = do
       bounds <- liftIO getBounds
-      modify $ set lLayoutState $ LayoutVSplit 100 (LayoutInstance name inst) defaultLayoutState
+      modify $ set lLayoutState $ LayoutVSplit 100 (view l st) defaultLayoutState
       pure (e, bounds)
     dragStartedY e getBounds _ _ = do
       bounds <- liftIO getBounds
@@ -400,23 +407,17 @@ layout' env@(Env {..}) tempLs lRightNeighbor lTopNeighbor lLayoutState = state $
       , ("overflow", if overflow then "auto" else "hidden")
       ]
 
-    hsplitLeft x = style
-      [ posAbsolute, left (px 0), top (px 0), width (pct x), bottom (px 0)
-      , borderLeft (solidBorder barColor 1)
-      ]
+    hsplitLeft x = style [ posAbsolute, left (px 0), top (px 0), width (pct x), bottom (px 0) ]
     hsplitRight x = style [ posAbsolute, left (pct x), top (px 0), right (px 0), bottom (px 0) ]
-    vsplitTop y = style
-      [ posAbsolute, left (px 0), top (px 0), right (px 0), height (pct y)
-      , borderBottom (solidBorder barColor 1)
-      ]
+    vsplitTop y = style [ posAbsolute, left (px 0), top (px 0), right (px 0), height (pct y) ]
     vsplitBottom y = style [ posAbsolute, left (px 0), top (pct y), right (px 0), bottom (px 0) ]
 
     dragBarRight = style
-      [ posAbsolute, top (px 0), right (px 0), width (px barSize), bottom (px 0)
+      [ posAbsolute, top (px barSize), right (px 0), width (px barSize), bottom (px 0)
       , backgroundColor barColor
       ]
     dragBarTop = style
-      [ posAbsolute, top (px 0), left (px 0), height (px barSize), right (px 0)
+      [ posAbsolute, top (px 0), left (px 0), height (px barSize), right (px barSize)
       , backgroundColor barColor
       ]
 
@@ -431,6 +432,10 @@ layout' env@(Env {..}) tempLs lRightNeighbor lTopNeighbor lLayoutState = state $
     dragHandleTop = style
       [ posAbsolute, top (px 0), left (pct 50), width (px barSize), height (px barSize)
       , marginLeft (px (-handleSize `div'` 2))
+      , backgroundColor handleColor
+      ]
+    dragHandleCorner = style
+      [ posAbsolute, top (px 0), right (px 0), width (px barSize), height (px barSize)
       , backgroundColor handleColor
       ]
     closeButton = style
