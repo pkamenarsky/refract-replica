@@ -56,7 +56,7 @@ marginLeft :: Text -> (Text, Text)
 marginLeft v = ("margin-left", v)
 
 marginTop :: Text -> (Text, Text)
-marginTop v = ("margin-left", v)
+marginTop v = ("margin-top", v)
 
 --------------------------------------------------------------------------------
 
