@@ -148,7 +148,7 @@ data DraggableState = DraggableState
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 data Instance
-  = InstanceRect
+  = InstanceEmpty
   | InstanceTree Path
   | InstanceInspector Path Path
   | InstanceSong Path
@@ -158,11 +158,11 @@ data Instance
 data LayoutState
   = LayoutHSplit Double LayoutState LayoutState
   | LayoutVSplit Double LayoutState LayoutState
-  | LayoutInstance Text Instance
+  | LayoutInstance Instance
   deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
 defaultLayoutState :: LayoutState
-defaultLayoutState = LayoutInstance "Inspector" (InstanceTree [Key "files"])
+defaultLayoutState = LayoutInstance InstanceEmpty
 
 --------------------------------------------------------------------------------
 

@@ -113,14 +113,13 @@ componentForInstance
   -> Instance
   -> Component st
 componentForInstance env@(Env {..}) inst = stateL envLDraggedInst $ \draggedInst -> case inst of
-  InstanceRect -> div [ fill ] []
+  InstanceEmpty -> div [ fill ] []
   InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree draggedInst)
   InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector draggedInst (envLValue % pathToLens v))
   where
     fill = style
       [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0)
-      , backgroundColor "#f00"
       ]
 
 -- Tree ------------------------------------------------------------------------
@@ -229,7 +228,7 @@ song env@(Env {..}) lSongState = div []
   [ domPath $ \path -> div [ frame ]
       [ div
           [ dragHandle
-          , shareable env (envGetBounds path) InstanceRect
+          , shareable env (envGetBounds path) InstanceEmpty
           ] []
       ]
   ]
@@ -259,9 +258,8 @@ layout
   -> (st -> st)
   -> Component st
 layout env@(Env {..}) lLayoutState close = stateL lLayoutState $ \stLayoutState -> case stLayoutState of
-  LayoutInstance name inst -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
-    [ -- [ {- componentForInstance env inst -} pre [ style [ ("user-select", "none") ] ] [ text $ toStrict $ pShowNoColor (handlesForLayout' tempLs) ] ]
-      [ div [ fill handleSize handleSize True ] [] ]
+  LayoutInstance inst -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
+    [ [ div [ fill handleSize handleSize True ] [ componentForInstance env inst ] ]
 
     -- Split handles
     , [ div
