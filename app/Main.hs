@@ -256,10 +256,9 @@ song env@(Env {..}) lSongState = div []
 layout
   :: Env st
   -> Lens' st LayoutState
-  -> Lens' st LayoutState
   -> (st -> st)
   -> Component st
-layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayoutState -> case stLayoutState of
+layout env@(Env {..}) lLayoutState close = stateL lLayoutState $ \stLayoutState -> case stLayoutState of
   LayoutInstance name inst -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
     [ -- [ {- componentForInstance env inst -} pre [ style [ ("user-select", "none") ] ] [ text $ toStrict $ pShowNoColor (handlesForLayout' tempLs) ] ]
       [ div [ fill handleSize handleSize True ] [] ]
@@ -284,8 +283,8 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
       ]
     ]
   LayoutHSplit x leftLayout rightLayout -> domPath $ \path -> div [ fill 0 0 False ]
-    [ div [ hsplitLeft x ] [ layout env lLayoutState (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) (over lLayoutState (const rightLayout)) ]
-    , div [ hsplitRight x ] [ layout env lLayoutState (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) (over lLayoutState (const leftLayout)) ]
+    [ div [ hsplitLeft x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) (over lLayoutState (const rightLayout)) ]
+    , div [ hsplitRight x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) (over lLayoutState (const leftLayout)) ]
     , div [ dragBarH x ] []
     , div
         [ dragBarHDraggable x
@@ -299,8 +298,8 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
         []
     ]
   LayoutVSplit y topLayout bottomLayout -> domPath $ \path -> div [ fill 0 0 False ]
-    [ div [ vsplitTop y ] [ layout env lLayoutState (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) (over lLayoutState (const bottomLayout)) ]
-    , div [ vsplitBottom y ] [ layout env lLayoutState (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) (over lLayoutState (const topLayout)) ]
+    [ div [ vsplitTop y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) (over lLayoutState (const bottomLayout)) ]
+    , div [ vsplitBottom y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) (over lLayoutState (const topLayout)) ]
     , div [ dragBarV y ] []
     , div
         [ dragBarVDraggable y
@@ -437,7 +436,7 @@ main = do
         -- , [ div [ style [ ("user-select", "none") ] ] [ text (pack $ show st) ] ]
         -- , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
 
-        , [ layout env undefined layoutState id ]
+        , [ layout env layoutState id ]
 
         -- Dragged instance
         , [ oneOrEmpty (draggedInstance % _Just) $ flip stateL $ \(inst, DraggableState (Rect x y w h) offset)  -> div
