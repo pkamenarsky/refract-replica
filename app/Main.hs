@@ -70,9 +70,6 @@ stateL l f = state $ \st -> f (view l st)
 zoom :: Lens' st a -> Component a -> Component st
 zoom l cmp = Component $ \path setState st -> runComponent cmp path (\a -> setState (set l a st)) (view l st)
 
-onTrackedDragEnd :: (MouseEvent -> ST.StateT st IO ()) -> Props st
-onTrackedDragEnd = onMouseUp
-
 oneOrWarning :: Path -> AffineTraversal' st a -> (Lens' st a -> Component st) -> Component st
 oneOrWarning p l f = state $ \st -> case preview l st of
   Nothing -> div [ frame ] []
@@ -114,25 +111,18 @@ componentForInstance
   -> Maybe (Lens' st Instance)
   -> Component st
 componentForInstance env@(Env {..}) inst mlInst = stateL envLDraggedInst $ \mDraggedInst -> case inst of
-  InstanceEmpty -> flip div [] $ mconcat
-    [ -- [ fill ]
-    case (mlInst, mDraggedInst) of
-        (Just lInst, Just (draggedInst, _)) ->
-          [ onMouseUp $ \_ -> do
-              liftIO $ print "lalal"
-              modify $ set lInst draggedInst
-          , fill "#777"
-          ]
-        _ -> [ onMouseUp $ \_ -> liftIO $ print "lalal2"
-             , fill "transparent"
-             ]
-    ]
+  InstanceEmpty -> div
+    [ fill
+    , onTrackedDragEnd $ \_ -> case (mlInst, mDraggedInst) of
+        (Just lInst, Just (draggedInst, _)) -> modify $ set lInst draggedInst
+        _ -> pure ()
+    ] []
   InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree mDraggedInst)
-  InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song (not $ isJust mlInst) env)
+  InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
   where
-    fill c = style
-      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0), backgroundColor c
+    fill = style
+      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0)
       ]
 
 -- Tree ------------------------------------------------------------------------
@@ -236,27 +226,27 @@ inspector draggedInst lv l = div
 
 -- Song ------------------------------------------------------------------------
 
-song :: Bool -> Env st -> Lens' st SongState -> Component st
-song dragged env@(Env {..}) lSongState = div []
+song :: Env st -> Lens' st SongState -> Component st
+song env@(Env {..}) lSongState = div []
   [ domPath $ \path -> div [ frame ]
-      [ flip div [] $ mconcat
-          [ [ dragHandle ]
-          , if dragged then [] else [ shareable env (envGetBounds path) (InstanceSong [Key "song"]) ]
+      [ div
+          [ dragHandle
+          , shareable env (envGetBounds path) (InstanceSong [Key "song"])
           ]
+          []
       ]
   ]
   where
     frame = style $
       [ posAbsolute
       , left (px 0), top (px 0), right (px 0), bottom (px 0)
-      -- , backgroundColor "#777"
-      ] <> if dragged then [ ("pointer-events", "none") ] else []
+      ]
 
     dragHandle = style $
       [ posAbsolute
       , top (px 8), left (px 8), width (px 8), height (px 8)
       , backgroundColor "#333"
-      ] <> if dragged then [ ("pointer-events", "none") ] else []
+      ]
 
 -- Layout ----------------------------------------------------------------------
 
@@ -423,7 +413,7 @@ layout env@(Env {..}) lLayoutState close = stateL lLayoutState $ \stLayoutState 
 
 data Env st = Env
   { envGetBounds :: GetBounds
-  , envStartDrag :: StartDrag st
+  , envStartDrag :: StartTrackedDrag st
   , envLValue :: Lens' st A.Value
   , envLDraggedInst :: Lens' st (Maybe (Instance, DraggableState))
   }
@@ -433,7 +423,7 @@ main = do
   runDefault 3777 "Tree" storeState readStore channels $ \ctx [ddChan, keyChan] ->
     let env = Env
           { envGetBounds = getBounds ctx
-          , envStartDrag = startDrag ctx ddChan
+          , envStartDrag = startTrackedDrag ctx ddChan
           , envLValue = global
           , envLDraggedInst = draggedInstance
           }

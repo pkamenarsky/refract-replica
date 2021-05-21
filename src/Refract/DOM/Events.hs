@@ -313,18 +313,18 @@ keyEvents ctx keyDown keyUp = do
         \ window.addEventListener('keyup', keyup); \n\
         \"
 
-type StartDrag st = forall a.
+type StartTrackedDrag st = forall a.
      MouseEvent
   -> (Int -> Int -> ST.StateT st IO a) -- ^ dragStarted
   -> (a -> Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
   -> (ST.StateT st IO ()) -- ^ dragFinished
   -> ST.StateT st IO ()
 
-startDrag
+startTrackedDrag
   :: R.Context
   -> TChan (st -> IO st) -- ^ setState
-  -> StartDrag st
-startDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = do
+  -> StartTrackedDrag st
+startTrackedDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = do
   ref <- liftIO $ newIORef undefined
 
   jsCb <- liftIO $ mfix $ \jsCb -> do
@@ -344,6 +344,9 @@ startDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = do
         \ var up = function(e) { \n\
         \   window.removeEventListener('mousemove', drag); \n\
         \   window.removeEventListener('mouseup', up); \n\
+        \   const element = document.elementFromPoint(e.clientX, e.clientY); \n\
+        \   const event = new Event('trackeddragend');; \n\
+        \   element.dispatchEvent(event); \n\
         \   callCallback(arg, null, true); \n\
         \ }; \n\
         \ window.addEventListener('mousemove', drag); \n\
@@ -360,3 +363,6 @@ startDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = do
         (y - mouseClientY mouseEvent)
 
     writeState ds = atomically $ writeTChan modStCh $ ST.execStateT ds
+
+onTrackedDragEnd :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onTrackedDragEnd f = Props "onTrackedDragEnd" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
