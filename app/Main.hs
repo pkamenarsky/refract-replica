@@ -44,7 +44,7 @@ import Optics.Setter
 import Optics.TH
 
 import Refract.DOM.Events
-import Refract.DOM.Props hiding (id, width, height)
+import Refract.DOM.Props hiding (min, max, id, width, height)
 import Refract.DOM
 import Refract
 
@@ -268,7 +268,7 @@ layout
 layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayoutState -> case stLayoutState of
   LayoutInstance name inst -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
     [ -- [ {- componentForInstance env inst -} pre [ style [ ("user-select", "none") ] ] [ text $ toStrict $ pShowNoColor (handlesForLayout' tempLs) ] ]
-      [ div [ fill (handleSize `div'` 2) (handleSize `div'` 2) True ] [] ]
+      [ div [ fill handleSize handleSize True ] [] ]
 
     -- Split handles
     , [ div
@@ -293,11 +293,11 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
     [ div [ hsplitLeft x ] [ layout env lLayoutState (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) (over lLayoutState (const rightLayout)) ]
     , div [ hsplitRight x ] [ layout env lLayoutState (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) (over lLayoutState (const leftLayout)) ]
     , div [ dragBarH x ] []
-    -- , div
-    --     [ dragBarHDraggable x
-    --     , onMouseDown $ \e -> envStartDrag e (dragStartedX e (envGetBounds path)) (dragDraggedX lLayoutState) dragFinished
-    --     ]
-    --     []
+    , div
+        [ dragBarHDraggable x
+        , onMouseDown $ \e -> envStartDrag e (dragStartedX e (envGetBounds path)) (dragDraggedX lLayoutState) dragFinished
+        ]
+        []
     , div
         [ dragBarHSplitHandle x
         , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY stLayoutState e (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished
@@ -308,11 +308,11 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
     [ div [ vsplitTop y ] [ layout env lLayoutState (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) (over lLayoutState (const bottomLayout)) ]
     , div [ vsplitBottom y ] [ layout env lLayoutState (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) (over lLayoutState (const topLayout)) ]
     , div [ dragBarV y ] []
-    -- , div
-    --     [ dragBarVDraggable y
-    --     , onMouseDown $ \e -> envStartDrag e (dragStartedY e (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished
-    --     ]
-    --     []
+    , div
+        [ dragBarVDraggable y
+        , onMouseDown $ \e -> envStartDrag e (dragStartedY e (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished
+        ]
+        []
     , div
         [ dragBarVSplitHandle y
         , onMouseDown $ \e -> envStartDrag e (dragStartedSplitX stLayoutState e (envGetBounds path)) (dragDraggedX lLayoutState) dragFinished
@@ -324,29 +324,31 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
 
     dragStartedSplitX st e getBounds _ _ = do
       bounds <- liftIO getBounds
-      modify $ set lLayoutState $ LayoutHSplit 100 st defaultLayoutState
+      modify $ set lLayoutState $ LayoutHSplit 90 st defaultLayoutState
       pure (e, bounds)
     dragStartedX e getBounds _ _ = do
       bounds <- liftIO getBounds
       pure (e, bounds)
     dragDraggedX l (e, (bx, _, bw, _)) x _ = do
-      modify $ set (l % _LayoutHSplit % _1) ((fi (mouseClientX e + x) - bx) * 100.0 / bw)
+      let xpct = ((fi (mouseClientX e + x) - bx) * 100.0 / bw)
+      modify $ set (l % _LayoutHSplit % _1) (max 10 (min 90 xpct))
     dragFinished = pure ()
 
     dragStartedSplitY st e getBounds _ _ = do
       bounds <- liftIO getBounds
-      modify $ set lLayoutState $ LayoutVSplit 100 defaultLayoutState st
+      modify $ set lLayoutState $ LayoutVSplit 10 defaultLayoutState st
       pure (e, bounds)
     dragStartedY e getBounds _ _ = do
       bounds <- liftIO getBounds
       pure (e, bounds)
     dragDraggedY l (e, (_, by, _, bh)) _ y = do
-      modify $ set (l % _LayoutVSplit % _1) ((fi (mouseClientY e + y) - by) * 100.0 / bh)
+      let ypct = ((fi (mouseClientY e + y) - by) * 100.0 / bh)
+      modify $ set (l % _LayoutVSplit % _1) (max 10 (min 90 ypct))
 
     barSize = 12
     barColor = "#aaa"
 
-    handleSize = 24
+    handleSize = 12
     handleColor = "#333"
 
     fill x y overflow = style
@@ -360,14 +362,14 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
     vsplitBottom y = style [ posAbsolute, left (px 0), top (pct y), right (px 0), bottom (px 0) ]
 
     dragBarHSplitHandle x = style
-      [ posAbsolute, top (px 0), left (pct x), width (px handleSize), height (px (handleSize `div'` 2))
-      , marginLeft (px (-handleSize `div'` 2))
+      [ posAbsolute, top (px 0), left (pct x), width (px (handleSize * 2)), height (px handleSize)
+      , marginLeft (px (-handleSize))
       , backgroundColor barColor
       ]
 
     dragBarHDraggable x = style
-      [ posAbsolute, top (px 0), left (pct x), bottom (px 0), width (px handleSize)
-      , marginLeft (px (-handleSize `div'` 2))
+      [ posAbsolute, top (px 0), left (pct x), bottom (px 0), width (px 6)
+      , marginLeft (px (-3))
       ]
 
     dragBarH x = style
@@ -376,14 +378,14 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
       ]
 
     dragBarVSplitHandle y = style
-      [ posAbsolute, right (px 0), top (pct y), width (px (handleSize `div'` 2)), height (px handleSize) 
-      , marginTop (px (-handleSize `div'` 2))
+      [ posAbsolute, right (px 0), top (pct y), width (px handleSize), height (px (handleSize * 2)) 
+      , marginTop (px (-handleSize))
       , backgroundColor barColor
       ]
 
     dragBarVDraggable y = style
-      [ posAbsolute, left (px 0), top (pct y), right (px 0), height (px handleSize)
-      , marginTop (px (-handleSize `div'` 2))
+      [ posAbsolute, left (px 0), top (pct y), right (px 0), height (px 6)
+      , marginTop (px (-3))
       ]
 
     dragBarV y = style
@@ -392,19 +394,19 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
       ]
 
     rightSplitHandle = style
-      [ posAbsolute, top (pct 50), right (px 0), width (px (handleSize `div'` 2)), height (px handleSize)
-      , marginTop (px (-handleSize `div'` 2))
+      [ posAbsolute, top (pct 50), right (px 0), width (px handleSize), height (px (handleSize * 2))
+      , marginTop (px (-handleSize))
       , backgroundColor barColor
       ]
 
     topSplitHandle = style
-      [ posAbsolute, top (px 0), left (pct 50), width (px handleSize), height (px (handleSize `div'` 2))
-      , marginLeft (px (-handleSize `div'` 2))
+      [ posAbsolute, top (px 0), left (pct 50), width (px (handleSize * 2)), height (px handleSize)
+      , marginLeft (px (-handleSize))
       , backgroundColor barColor
       ]
 
     closeButton = style
-      [ posAbsolute, top (px (handleSize `div'` 2)), right (px (handleSize `div'` 2)), width (px (handleSize `div'` 2)), height (px (handleSize `div'` 2))
+      [ posAbsolute, top (px handleSize), right (px handleSize), width (px handleSize), height (px handleSize)
       , backgroundColor handleColor
       ]
 
