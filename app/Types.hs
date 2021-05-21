@@ -126,19 +126,6 @@ jsonToNodeState nn (A.Bool s) _ = NodeState nn False (NodeBool s)
 jsonToNodeState nn A.Null (NodeState _ mo (NodeString t)) = NodeState nn mo (NodeString "null")
 jsonToNodeState nn A.Null _ = NodeState nn False (NodeString "null")
 
-data WindowState = WindowState
-  { _wndRect :: Rect
-  , _wndDragOffset :: Maybe Point
-  , _wndTitleBar :: Bool
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
-
-defaultWindowState :: WindowState
-defaultWindowState = WindowState
-  { _wndRect = Rect 100 100 500 500
-  , _wndDragOffset = Nothing
-  , _wndTitleBar = True 
-  }
-
 data SongState = SongState deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 defaultSongState :: SongState
@@ -155,6 +142,11 @@ dataGetter = undefined
 dataSetter :: Data a -> Maybe (a -> A.Value -> A.Value)
 dataSetter = undefined
 
+data DraggableState = DraggableState
+  { _dsRect :: Rect
+  , _dsDragOffset :: Maybe Point
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
 data Instance
   = InstanceRect
   | InstanceTree Path
@@ -162,19 +154,6 @@ data Instance
   | InstanceSong Path
   | InstancePlaylist [Path]
   deriving (Show, Generic, A.FromJSON, A.ToJSON)
-
-data InstanceState = InstanceState
-  { _instName :: Text
-  , _instWindowState :: WindowState
-  , _instInstance :: Instance
-  } deriving (Show, Generic, A.FromJSON, A.ToJSON)
-
-defaultInstanceState :: InstanceState
-defaultInstanceState = InstanceState
-  { _instName = "X"
-  , _instWindowState = defaultWindowState
-  , _instInstance = InstanceRect
-  }
 
 data LayoutState
   = LayoutHSplit Double LayoutState LayoutState
@@ -187,10 +166,11 @@ defaultLayoutState = LayoutInstance "Inspector" (InstanceTree [Key "files"])
 
 --------------------------------------------------------------------------------
 
+type DraggedInstance = (Instance, DraggableState)
+
 data State = State
-  { _draggedInstance :: Maybe InstanceState
-  , _instances :: H.HashMap Text InstanceState
-  , _global :: A.Value
+  { _global :: A.Value
+  , _draggedInstance :: Maybe DraggedInstance
   , _layoutState :: LayoutState
   } deriving (Show, Generic, A.ToJSON, A.FromJSON)
 
@@ -203,12 +183,6 @@ globalState = A.object
 
 defaultState = State
   { _draggedInstance = Nothing
-  , _instances = H.fromList
-    [ ("A", InstanceState "A" defaultWindowState (InstanceTree [Key "files"]))
-    , ("B", InstanceState "B" defaultWindowState (InstanceTree [Key "files"]))
-    , ("C", InstanceState "C" defaultWindowState (InstanceSong [Key "song"]))
-    , ("D", InstanceState "D" defaultWindowState (InstanceInspector [Key "inspector"] []))
-    ]
   , _global = globalState
   , _layoutState = defaultLayoutState
   }
@@ -217,11 +191,10 @@ defaultState = State
 
 makeLenses ''Rect
 makeLenses ''Point
-makeLenses ''WindowState
+makeLenses ''DraggableState
 makePrisms ''NodeValue
 makeLenses ''InspectorState
 makeLenses ''NodeState
 makeLenses ''Instance
-makeLenses ''InstanceState
 makePrisms ''LayoutState
 makeLenses ''State

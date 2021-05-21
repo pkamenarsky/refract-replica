@@ -90,26 +90,20 @@ oneOrEmpty l f = state $ \st -> case preview l st of
 
 -- Shareable -------------------------------------------------------------------
 
-shareable
-  :: Env st
-  -> IO Bounds
-  -> Instance
-  -> Props st
+shareable :: Env st -> IO Bounds -> Instance -> Props st
 shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dragStarted dragDragged dragDropped
   where
     dragStarted _ _ = do
       (x, y, w, h) <- liftIO getParentBounds
 
-      modify $ set envLDraggedInst $ Just $ InstanceState
-        { _instName = "DRAGGED"
-        , _instWindowState = WindowState
-            { _wndRect = Rect (round x) (round y) (round w) (round h)
-            , _wndDragOffset = Just origin
-            , _wndTitleBar = False
-            }
-        , _instInstance = inst
-        }
-    dragDragged _ x y = modify $ set (envLDraggedInst % _Just % instWindowState % wndDragOffset % _Just) (Point x y)
+      modify $ set envLDraggedInst $ Just
+       ( inst
+       , DraggableState
+           { _dsRect = Rect (round x) (round y) (round w) (round h)
+           , _dsDragOffset = Just origin
+           }
+       )
+    dragDragged _ x y = modify $ set (envLDraggedInst % _Just % _2 % dsDragOffset % _Just) (Point x y)
     dragDropped = modify $ set envLDraggedInst Nothing
 
 -- Instances -------------------------------------------------------------------
@@ -131,7 +125,7 @@ componentForInstance env@(Env {..}) inst = stateL envLDraggedInst $ \draggedInst
 
 -- Tree ------------------------------------------------------------------------
 
-showTree :: Maybe InstanceState -> Lens' st NodeState -> Component st
+showTree :: Maybe DraggedInstance -> Lens' st NodeState -> Component st
 showTree draggedInst l = div
   [ onTrackedDragEnd $ \e -> case draggedInst of
       Just inst -> do
@@ -175,7 +169,7 @@ showTree draggedInst l = div
           , ("user-select", "none")
           ]
 
-inspector :: Maybe InstanceState -> AffineTraversal' st A.Value -> Lens' st InspectorState -> Component st
+inspector :: Maybe DraggedInstance -> AffineTraversal' st A.Value -> Lens' st InspectorState -> Component st
 inspector draggedInst lv l = div
   [ onTrackedDragEnd $ \e -> case draggedInst of
       Just inst -> do
@@ -426,7 +420,7 @@ data Env st = Env
   { envGetBounds :: GetBounds
   , envStartDrag :: StartDrag st
   , envLValue :: Lens' st A.Value
-  , envLDraggedInst :: Lens' st (Maybe InstanceState)
+  , envLDraggedInst :: Lens' st (Maybe (Instance, DraggableState))
   }
 
 main :: IO ()
@@ -443,12 +437,19 @@ main = do
         -- , [ div [ style [ ("user-select", "none") ] ] [ text (pack $ show st) ] ]
         -- , [ div [ onClick $ \_ -> liftIO $ R.call ctx () "document.body.requestFullscreen()" ] [ text "Enter fullscreen" ] ]
 
-        -- Dragged instance
-        -- , [ oneOrEmpty (draggedInstance % _Just) $ windowForInstance undefined undefined draggedInstance global ]
-        -- , [ layout env (_layoutState st) node layoutState ]
         , [ layout env undefined layoutState id ]
+
+        -- Dragged instance
+        , [ oneOrEmpty (draggedInstance % _Just) $ flip stateL $ \(inst, DraggableState (Rect x y w h) offset)  -> div
+              [ style [ posAbsolute, top (px (x + xo offset)), left (px (y + yo offset)), width (px w), height (px h) ]
+              ]
+              [ componentForInstance env inst ]
+          ]
         ]
   where
+    xo = maybe 0 _pointX
+    yo = maybe 0 _pointY
+
     channels ctx = do
       ddChan <- newTChanIO
       keyChan <- newTChanIO
