@@ -347,6 +347,7 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
 
     barSize = 12
     barColor = "#aaa"
+    transparent = "transparent"
 
     handleSize = 12
     handleColor = "#333"
@@ -361,10 +362,14 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
     vsplitTop y = style [ posAbsolute, left (px 0), top (px 0), right (px 0), height (pct y) ]
     vsplitBottom y = style [ posAbsolute, left (px 0), top (pct y), right (px 0), bottom (px 0) ]
 
+    border which x color = ("border-" <> which, x <> " solid " <> color)
+
     dragBarHSplitHandle x = style
-      [ posAbsolute, top (px 0), left (pct x), width (px (handleSize * 2)), height (px handleSize)
+      [ posAbsolute, top (px 0), left (pct x), width (px 0), height (px handleSize)
       , marginLeft (px (-handleSize))
-      , backgroundColor barColor
+      , border "top" (px handleSize) barColor
+      , border "left" (px handleSize) transparent
+      , border "right" (px handleSize) transparent
       ]
 
     dragBarHDraggable x = style
@@ -378,9 +383,11 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
       ]
 
     dragBarVSplitHandle y = style
-      [ posAbsolute, right (px 0), top (pct y), width (px handleSize), height (px (handleSize * 2)) 
+      [ posAbsolute, right (px 0), top (pct y), width (px handleSize), height (px 0) 
       , marginTop (px (-handleSize))
-      , backgroundColor barColor
+      , border "right" (px handleSize) barColor
+      , border "top" (px handleSize) transparent
+      , border "bottom" (px handleSize) transparent
       ]
 
     dragBarVDraggable y = style
@@ -394,20 +401,25 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
       ]
 
     rightSplitHandle = style
-      [ posAbsolute, top (pct 50), right (px 0), width (px handleSize), height (px (handleSize * 2))
+      [ posAbsolute, top (pct 50), right (px 0), width (px handleSize), height (px 0)
       , marginTop (px (-handleSize))
-      , backgroundColor barColor
+      , border "right" (px handleSize) barColor
+      , border "top" (px handleSize) transparent
+      , border "bottom" (px handleSize) transparent
       ]
 
     topSplitHandle = style
-      [ posAbsolute, top (px 0), left (pct 50), width (px (handleSize * 2)), height (px handleSize)
+      [ posAbsolute, top (px 0), left (pct 50), width (px 0), height (px handleSize)
       , marginLeft (px (-handleSize))
-      , backgroundColor barColor
+      , border "top" (px handleSize) barColor
+      , border "left" (px handleSize) transparent
+      , border "right" (px handleSize) transparent
       ]
 
     closeButton = style
       [ posAbsolute, top (px handleSize), right (px handleSize), width (px handleSize), height (px handleSize)
-      , backgroundColor handleColor
+      , backgroundColor barColor
+      , ("border-radius", px handleSize)
       ]
 
 -- OS --------------------------------------------------------------------------
