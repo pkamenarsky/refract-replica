@@ -115,17 +115,24 @@ componentForInstance
   -> Component st
 componentForInstance env@(Env {..}) inst mlInst = stateL envLDraggedInst $ \mDraggedInst -> case inst of
   InstanceEmpty -> flip div [] $ mconcat
-    [ [ fill ]
-    , case (mlInst, mDraggedInst) of
-        (Just lInst, Just (draggedInst, _)) -> [ onMouseUp $ \_ -> modify $ set lInst draggedInst ]
-        _ -> []
+    [ -- [ fill ]
+    case (mlInst, mDraggedInst) of
+        (Just lInst, Just (draggedInst, _)) ->
+          [ onMouseUp $ \_ -> do
+              liftIO $ print "lalal"
+              modify $ set lInst draggedInst
+          , fill "#777"
+          ]
+        _ -> [ onMouseUp $ \_ -> liftIO $ print "lalal2"
+             , fill "transparent"
+             ]
     ]
   InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree mDraggedInst)
-  InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
+  InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song (not $ isJust mlInst) env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
   where
-    fill = style
-      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0)
+    fill c = style
+      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0), backgroundColor c
       ]
 
 -- Tree ------------------------------------------------------------------------
@@ -229,27 +236,27 @@ inspector draggedInst lv l = div
 
 -- Song ------------------------------------------------------------------------
 
-song :: Env st -> Lens' st SongState -> Component st
-song env@(Env {..}) lSongState = div []
+song :: Bool -> Env st -> Lens' st SongState -> Component st
+song dragged env@(Env {..}) lSongState = div []
   [ domPath $ \path -> div [ frame ]
-      [ div
-          [ dragHandle
-          , shareable env (envGetBounds path) (InstanceSong [Key "song"])
-          ] []
+      [ flip div [] $ mconcat
+          [ [ dragHandle ]
+          , if dragged then [] else [ shareable env (envGetBounds path) (InstanceSong [Key "song"]) ]
+          ]
       ]
   ]
   where
-    frame = style
+    frame = style $
       [ posAbsolute
       , left (px 0), top (px 0), right (px 0), bottom (px 0)
       -- , backgroundColor "#777"
-      ]
+      ] <> if dragged then [ ("pointer-events", "none") ] else []
 
-    dragHandle = style
+    dragHandle = style $
       [ posAbsolute
       , top (px 8), left (px 8), width (px 8), height (px 8)
       , backgroundColor "#333"
-      ]
+      ] <> if dragged then [ ("pointer-events", "none") ] else []
 
 -- Layout ----------------------------------------------------------------------
 
@@ -439,7 +446,7 @@ main = do
 
         -- Dragged instance
         , [ oneOrEmpty (draggedInstance % _Just) $ flip stateL $ \(inst, DraggableState (Rect x y w h) offset)  -> div
-              [ style [ posAbsolute, left (px (x + xo offset)), top (px (y + yo offset)), width (px w), height (px h), border "1px solid #777" ]
+              [ style [ posAbsolute, left (px (x + xo offset)), top (px (y + yo offset)), width (px w), height (px h), border "1px solid #777", ("pointer-events", "none") ]
               ]
               [ componentForInstance env inst Nothing ]
           ]
