@@ -345,12 +345,10 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
       let ypct = ((fi (mouseClientY e + y) - by) * 100.0 / bh)
       modify $ set (l % _LayoutVSplit % _1) (max 10 (min 90 ypct))
 
-    barSize = 12
-    barColor = "#aaa"
     transparent = "transparent"
 
-    handleSize = 12
-    handleColor = "#333"
+    handleSize = 10
+    handleColor = "#aaa"
 
     fill x y overflow = style
       [ posAbsolute, left (px 0), top (px y), right (px x), bottom (px 0)
@@ -367,7 +365,7 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
     dragBarHSplitHandle x = style
       [ posAbsolute, top (px 0), left (pct x), width (px 0), height (px handleSize)
       , marginLeft (px (-handleSize))
-      , border "top" (px handleSize) barColor
+      , border "top" (px handleSize) handleColor
       , border "left" (px handleSize) transparent
       , border "right" (px handleSize) transparent
       ]
@@ -379,13 +377,13 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
 
     dragBarH x = style
       [ posAbsolute, top (px 0), left (pct x), bottom (px 0), width (px 1)
-      , backgroundColor barColor
+      , backgroundColor handleColor
       ]
 
     dragBarVSplitHandle y = style
       [ posAbsolute, right (px 0), top (pct y), width (px handleSize), height (px 0) 
       , marginTop (px (-handleSize))
-      , border "right" (px handleSize) barColor
+      , border "right" (px handleSize) handleColor
       , border "top" (px handleSize) transparent
       , border "bottom" (px handleSize) transparent
       ]
@@ -397,13 +395,13 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
 
     dragBarV y = style
       [ posAbsolute, left (px 0), top (pct y), right (px 0), height (px 1)
-      , backgroundColor barColor
+      , backgroundColor handleColor
       ]
 
     rightSplitHandle = style
       [ posAbsolute, top (pct 50), right (px 0), width (px handleSize), height (px 0)
       , marginTop (px (-handleSize))
-      , border "right" (px handleSize) barColor
+      , border "right" (px handleSize) handleColor
       , border "top" (px handleSize) transparent
       , border "bottom" (px handleSize) transparent
       ]
@@ -411,14 +409,14 @@ layout env@(Env {..}) lParent lLayoutState close = stateL lLayoutState $ \stLayo
     topSplitHandle = style
       [ posAbsolute, top (px 0), left (pct 50), width (px 0), height (px handleSize)
       , marginLeft (px (-handleSize))
-      , border "top" (px handleSize) barColor
+      , border "top" (px handleSize) handleColor
       , border "left" (px handleSize) transparent
       , border "right" (px handleSize) transparent
       ]
 
     closeButton = style
       [ posAbsolute, top (px handleSize), right (px handleSize), width (px handleSize), height (px handleSize)
-      , backgroundColor barColor
+      , backgroundColor handleColor
       , ("border-radius", px handleSize)
       ]
 
