@@ -111,12 +111,18 @@ shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dra
 componentForInstance
   :: Env st
   -> Instance
+  -> Maybe (Lens' st Instance)
   -> Component st
-componentForInstance env@(Env {..}) inst = stateL envLDraggedInst $ \draggedInst -> case inst of
-  InstanceEmpty -> div [ fill ] []
-  InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree draggedInst)
+componentForInstance env@(Env {..}) inst mlInst = stateL envLDraggedInst $ \mDraggedInst -> case inst of
+  InstanceEmpty -> flip div [] $ mconcat
+    [ [ fill ]
+    , case (mlInst, mDraggedInst) of
+        (Just lInst, Just (draggedInst, _)) -> [ onMouseUp $ \_ -> modify $ set lInst draggedInst ]
+        _ -> []
+    ]
+  InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree mDraggedInst)
   InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
-  InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector draggedInst (envLValue % pathToLens v))
+  InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
   where
     fill = style
       [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0)
@@ -228,26 +234,21 @@ song env@(Env {..}) lSongState = div []
   [ domPath $ \path -> div [ frame ]
       [ div
           [ dragHandle
-          , shareable env (envGetBounds path) InstanceEmpty
+          , shareable env (envGetBounds path) (InstanceSong [Key "song"])
           ] []
       ]
   ]
   where
     frame = style
-      [ ("position", "absolute")
-      , ("left", px 0)
-      , ("top", px 0)
-      , ("right", px 0)
-      , ("bottom", px 0)
+      [ posAbsolute
+      , left (px 0), top (px 0), right (px 0), bottom (px 0)
+      -- , backgroundColor "#777"
       ]
 
     dragHandle = style
-      [ ("position", "absolute")
-      , ("top", px 8)
-      , ("right", px 8)
-      , ("width", px 8)
-      , ("height", px 8)
-      , ("background-color", "#333")
+      [ posAbsolute
+      , top (px 8), left (px 8), width (px 8), height (px 8)
+      , backgroundColor "#333"
       ]
 
 -- Layout ----------------------------------------------------------------------
@@ -259,7 +260,7 @@ layout
   -> Component st
 layout env@(Env {..}) lLayoutState close = stateL lLayoutState $ \stLayoutState -> case stLayoutState of
   LayoutInstance inst -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
-    [ [ div [ fill handleSize handleSize True ] [ componentForInstance env inst ] ]
+    [ [ div [ fill handleSize handleSize True ] [ componentForInstance env inst (Just $ unsafeToLens $ lLayoutState % _LayoutInstance) ] ]
 
     -- Split handles
     , [ div
@@ -438,9 +439,9 @@ main = do
 
         -- Dragged instance
         , [ oneOrEmpty (draggedInstance % _Just) $ flip stateL $ \(inst, DraggableState (Rect x y w h) offset)  -> div
-              [ style [ posAbsolute, top (px (x + xo offset)), left (px (y + yo offset)), width (px w), height (px h) ]
+              [ style [ posAbsolute, left (px (x + xo offset)), top (px (y + yo offset)), width (px w), height (px h), border "1px solid #777" ]
               ]
-              [ componentForInstance env inst ]
+              [ componentForInstance env inst Nothing ]
           ]
         ]
   where
@@ -475,8 +476,11 @@ main = do
 
       case store of
         Nothing -> do
-          storeState defaultState
-          pure $ Just defaultState
+          let st = defaultState
+                { _layoutState = LayoutHSplit 20 (LayoutInstance (InstanceSong [Key "song"])) (LayoutInstance InstanceEmpty)
+                }
+          storeState st
+          pure $ Just st
         Just store -> A.decode <$> Store.readStore (Store.Store 0)
 
 --------------------------------------------------------------------------------
