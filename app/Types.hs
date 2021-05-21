@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -144,6 +145,15 @@ defaultSongState :: SongState
 defaultSongState = SongState
 
 data PlaylistState = PlaylistState deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+data Data a = DataPath Path | forall b. DataF (Data b) (b -> a) | forall b. DataIso (Data b) (b -> a) (a -> b)
+
+dataGetter :: Data a -> A.Value -> a
+dataGetter = undefined
+
+-- only if there is an unbroken Iso chain
+dataSetter :: Data a -> Maybe (a -> A.Value -> A.Value)
+dataSetter = undefined
 
 data Instance
   = InstanceRect
