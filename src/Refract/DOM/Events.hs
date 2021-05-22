@@ -320,6 +320,7 @@ type StartTrackedDrag st = forall a.
   -> (ST.StateT st IO ()) -- ^ dragFinished
   -> ST.StateT st IO ()
 
+-- TODO: pointer capture instead of windows
 startTrackedDrag
   :: R.Context
   -> TChan (st -> IO st) -- ^ setState

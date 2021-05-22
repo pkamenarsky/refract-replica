@@ -55,8 +55,14 @@ height v = ("height", v)
 marginLeft :: Text -> (Text, Text)
 marginLeft v = ("margin-left", v)
 
+marginRight :: Text -> (Text, Text)
+marginRight v = ("margin-right", v)
+
 marginTop :: Text -> (Text, Text)
 marginTop v = ("margin-top", v)
+
+marginBottom :: Text -> (Text, Text)
+marginBottom v = ("margin-bottom", v)
 
 --------------------------------------------------------------------------------
 
