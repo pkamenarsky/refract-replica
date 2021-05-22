@@ -147,6 +147,13 @@ defaultCabinetState = CabinetState []
 
 --------------------------------------------------------------------------------
 
+data ProfileState = ProfileState
+  { _pstName :: Text
+  , _pstAge :: Int
+  } deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+--------------------------------------------------------------------------------
+
 data Instance
   = InstanceEmpty
   | InstanceTree Path
@@ -154,6 +161,7 @@ data Instance
   | InstanceInspector Path Path
   | InstanceSong Path
   | InstancePlaylist [Path]
+  | InstanceProfile Path Bool Text
   deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 data LayoutState
@@ -187,6 +195,7 @@ globalState = A.object
   , "inspector" A..= defaultInspectorState
   , "phil" A..= defaultCabinetState
   , "satan" A..= defaultCabinetState
+  , "god" A..= ProfileState "GOD" 666
   ]
 
 defaultState = State
@@ -205,4 +214,6 @@ makeLenses ''InspectorState
 makeLenses ''NodeState
 makeLenses ''Instance
 makePrisms ''LayoutState
+makeLenses ''ProfileState
 makeLenses ''State
+makePrisms ''Instance

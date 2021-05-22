@@ -13,6 +13,7 @@ module Main where
 import Control.Monad.Trans.State (get, modify)
 import qualified Control.Monad.Trans.State as ST
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad (when)
 
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
@@ -148,6 +149,45 @@ cabinet env stPath lInst lState = stateL (envLValue env) $ \st -> stateL lState 
       , ("border-radius", px handleSize)
       ]
 
+-- Profile ---------------------------------------------------------------------
+
+inputOnEnter :: (Text -> ST.StateT st IO ()) -> Lens' st Text -> Component st
+inputOnEnter f lTmp = stateL lTmp $ \tmp -> input
+  [ autofocus True
+  , onInput $ \e -> modify $ set lTmp (fromMaybe "" $ targetValue $ target e)
+  , onKeyDown $ \e -> when (kbdKey e == "Enter") (f tmp)
+  , value tmp
+  ]
+
+profile :: Env st -> Path -> Lens' st Instance -> Lens' st ProfileState -> Component st
+profile env stPath lInst lState = stateL lInst $ \(InstanceProfile _ edited _) -> stateL lState $ \(ProfileState name _) -> domPath $ \rootPath -> div
+  [ style (fill 0) ]
+  [ div
+      [ style (fill 20 <> [("overflow", "auto")]) ]
+      [ div [] [ text "Profile" ]
+      , if edited
+          then inputOnEnter (setValue pstName) (unsafeToLens $ lInst % _InstanceProfile % _3)
+          else div [ onDoubleClick $ \_ -> modify $ set (lInst % _InstanceProfile % _2) True ] [ text ("Name: " <> name) ]
+      ]
+  , div
+      [ dragHandle
+      , shareable env (envGetBounds env rootPath) (InstanceProfile stPath False "")
+      ] []
+  ]
+  where
+    setValue l v = do
+      modify $ set (lState % l) v
+      modify $ set (lInst % _InstanceProfile % _2) False
+
+    fill y = [ posAbsolute, left (px 0), top (px y), right (px 0), bottom (px 0) ]
+
+    dragHandle = style
+      [ posAbsolute, top (px handleSize), left (px handleSize), width (px handleSize), height (px handleSize)
+      , backgroundColor "#333"
+      , ("border-radius", px handleSize)
+      ]
+
+
 -- Instances -------------------------------------------------------------------
 
 componentForInstance
@@ -165,6 +205,7 @@ componentForInstance env@(Env {..}) lInst = stateL lInst $ \inst -> stateL envLD
   InstanceCabinet st -> oneOrWarning st (envLValue % pathToLens st) (cabinet env st lInst)
   InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
+  InstanceProfile st _ v -> oneOrWarning st (envLValue % pathToLens st) (profile env st lInst)
 
 draggedComponentForInstance :: Instance -> Component st
 draggedComponentForInstance InstanceEmpty = empty
@@ -192,6 +233,12 @@ draggedComponentForInstance (InstanceInspector path _) = div
   [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
   , text (showPath path)
   ]
+draggedComponentForInstance (InstanceProfile path _ _) = div
+  [ style [ ("float", "left"), width (px 50), height (px 70) ]
+  ]
+  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
+  , text (showPath path)
+  ]
 
 nameForInstance :: Instance -> Text
 nameForInstance InstanceEmpty = ""
@@ -199,15 +246,14 @@ nameForInstance (InstanceTree path) = showPath path
 nameForInstance (InstanceCabinet path) = showPath path
 nameForInstance (InstanceSong path) = showPath path
 nameForInstance (InstanceInspector path _) = showPath path
+nameForInstance (InstanceProfile path _ _) = showPath path
 
 -- Tree ------------------------------------------------------------------------
 
 showTree :: Maybe DraggedInstance -> Lens' st NodeState -> Component st
 showTree draggedInst l = div
   [ onTrackedDragEnd $ \e -> case draggedInst of
-      Just inst -> do
-        liftIO $ print e
-        modify $ set l $ NodeState "RECT" False (NodeArray True [])
+      Just inst -> modify $ set l $ NodeState "RECT" False (NodeArray True [])
       Nothing -> pure ()
   ]
   [ go 0 l ]
@@ -547,7 +593,7 @@ main = do
         Nothing -> do
           let st = defaultState
                 { _layoutState = LayoutHSplit 20
-                    (LayoutInstance (InstanceSong [Key "song"]))
+                    (LayoutVSplit 50 (LayoutInstance (InstanceProfile [Key "god"] False "")) (LayoutInstance (InstanceSong [Key "song"])))
                     (LayoutVSplit 50 (LayoutInstance (InstanceCabinet [Key "phil"])) (LayoutInstance (InstanceCabinet [Key "satan"])))
                 }
           storeState st
