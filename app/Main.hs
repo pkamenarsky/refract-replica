@@ -96,7 +96,8 @@ handleColor = "#aaa"
 shareable :: Env st -> IO Bounds -> Instance -> Props st
 shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dragStarted dragDragged dragDropped
   where
-    dragStarted _ _ = do
+    dragStarted = pure ()
+    dragDragged _ True _ _ = do
       (x, y, w, h) <- liftIO getParentBounds
 
       modify $ set envLDraggedInst $ Just
@@ -106,7 +107,8 @@ shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dra
            , _dsDragOffset = Just origin
            }
        )
-    dragDragged _ x y = modify $ set (envLDraggedInst % _Just % _2 % dsDragOffset % _Just) (Point x y)
+    dragDragged _ False x y = do
+      modify $ set (envLDraggedInst % _Just % _2 % dsDragOffset % _Just) (Point x y)
     dragDropped = modify $ set envLDraggedInst Nothing
 
 -- Cabinet ---------------------------------------------------------------------
@@ -123,6 +125,7 @@ cabinet env lState = stateL lState $ \(CabinetState st) -> stateL (envLDraggedIn
       [ domPath $ \path -> div
           [ style [ ("float", "left"), marginLeft (px 15), marginRight (px 15), marginTop (px 30), width (px 50), height (px 70) ]
           , shareable env (envGetBounds env path) inst
+          , onDoubleClick $ \_ -> liftIO (print $ show inst)
           ]
           [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
           , text (nameForInstance inst)
@@ -354,26 +357,26 @@ layout env@(Env {..}) lLayoutState close = stateL lLayoutState $ \stLayoutState 
   where
     fi = fromIntegral
 
-    dragStartedSplitX st e getBounds _ _ = do
+    dragStartedSplitX st e getBounds = do
       bounds <- liftIO getBounds
       modify $ set lLayoutState $ LayoutHSplit 90 st defaultLayoutState
       pure (e, bounds)
-    dragStartedX e getBounds _ _ = do
+    dragStartedX e getBounds = do
       bounds <- liftIO getBounds
       pure (e, bounds)
-    dragDraggedX l (e, (bx, _, bw, _)) x _ = do
+    dragDraggedX l (e, (bx, _, bw, _)) _ x _ = do
       let xpct = ((fi (mouseClientX e + x) - bx) * 100.0 / bw)
       modify $ set (l % _LayoutHSplit % _1) (max 10 (min 90 xpct))
     dragFinished = pure ()
 
-    dragStartedSplitY st e getBounds _ _ = do
+    dragStartedSplitY st e getBounds = do
       bounds <- liftIO getBounds
       modify $ set lLayoutState $ LayoutVSplit 10 defaultLayoutState st
       pure (e, bounds)
-    dragStartedY e getBounds _ _ = do
+    dragStartedY e getBounds = do
       bounds <- liftIO getBounds
       pure (e, bounds)
-    dragDraggedY l (e, (_, by, _, bh)) _ y = do
+    dragDraggedY l (e, (_, by, _, bh)) _ _ y = do
       let ypct = ((fi (mouseClientY e + y) - by) * 100.0 / bh)
       modify $ set (l % _LayoutVSplit % _1) (max 10 (min 90 ypct))
 

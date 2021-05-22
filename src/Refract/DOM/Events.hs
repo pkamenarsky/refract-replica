@@ -315,8 +315,8 @@ keyEvents ctx keyDown keyUp = do
 
 type StartTrackedDrag st = forall a.
      MouseEvent
-  -> (Int -> Int -> ST.StateT st IO a) -- ^ dragStarted
-  -> (a -> Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
+  -> (ST.StateT st IO a) -- ^ dragStarted
+  -> (a -> Bool -> Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
   -> (ST.StateT st IO ()) -- ^ dragFinished
   -> ST.StateT st IO ()
 
@@ -333,16 +333,18 @@ startTrackedDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = d
     pure jsCb
 
   liftIO $ writeState $ do
-    a <- dragStarted 0 0
+    a <- dragStarted
     liftIO $ writeIORef ref a
 
   liftIO $ R.call ctx jsCb js
   where
-    js = "var drag = function(e) { \n\
-        \   callCallback(arg, [e.clientX, e.clientY], true); \n\
+    js = "let first_drag = true; \n\
+        \ let drag = function(e) { \n\
+        \   callCallback(arg, [first_drag, e.clientX, e.clientY], true); \n\
+        \   first_drag = false; \n\
         \   e.preventDefault(); \n\
         \ }; \n\
-        \ var up = function(e) { \n\
+        \ let up = function(e) { \n\
         \   window.removeEventListener('mousemove', drag); \n\
         \   window.removeEventListener('mouseup', up); \n\
         \   const element = document.elementFromPoint(e.clientX, e.clientY); \n\
@@ -357,9 +359,10 @@ startTrackedDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = d
     dragged _ jsCb xy@Nothing = do
       liftIO $ R.unregisterCallback ctx jsCb
       writeState dragFinished
-    dragged ref jsCb xy@(Just (x, y)) = writeState $ do
+    dragged ref jsCb xy@(Just (firstDrag, x, y)) = writeState $ do
       a <- liftIO $ readIORef ref
       dragDragged a
+        firstDrag
         (x - mouseClientX mouseEvent)
         (y - mouseClientY mouseEvent)
 
