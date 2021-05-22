@@ -166,6 +166,33 @@ componentForInstance env@(Env {..}) lInst = stateL lInst $ \inst -> stateL envLD
   InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
 
+draggedComponentForInstance :: Instance -> Component st
+draggedComponentForInstance InstanceEmpty = empty
+draggedComponentForInstance (InstanceTree path) = div
+  [ style [ ("float", "left"), width (px 50), height (px 70) ]
+  ]
+  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
+  , text (showPath path)
+  ]
+draggedComponentForInstance (InstanceCabinet path) = div
+  [ style [ ("float", "left"), width (px 50), height (px 70) ]
+  ]
+  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
+  , text (showPath path)
+  ]
+draggedComponentForInstance (InstanceSong path) = div
+  [ style [ ("float", "left"), width (px 50), height (px 70) ]
+  ]
+  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
+  , text (showPath path)
+  ]
+draggedComponentForInstance (InstanceInspector path _) = div
+  [ style [ ("float", "left"), width (px 50), height (px 70) ]
+  ]
+  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
+  , text (showPath path)
+  ]
+
 nameForInstance :: Instance -> Text
 nameForInstance InstanceEmpty = ""
 nameForInstance (InstanceTree path) = showPath path
@@ -480,10 +507,10 @@ main = do
         , [ layout env layoutState id ]
 
         -- Dragged instance
-        , [ oneOrEmpty (draggedInstance % _Just) $ \lDraggedInstance -> stateL lDraggedInstance $ \(_, DraggableState (Rect x y w h) offset)  -> div
-              [ style [ posAbsolute, left (px (x + xo offset)), top (px (y + yo offset)), width (px w), height (px h), border "1px solid #777", ("pointer-events", "none") ]
+        , [ oneOrEmpty (draggedInstance % _Just) $ \lDraggedInstance -> stateL lDraggedInstance $ \(stDraggedInstance, DraggableState (Rect x y w h) offset)  -> div
+              [ style [ posAbsolute, left (px (x + xo offset)), top (px (y + yo offset)), width (px w), height (px h), ("pointer-events", "none") ]
               ]
-              [ componentForInstance env (lDraggedInstance % _1) ]
+              [ draggedComponentForInstance stDraggedInstance ]
           ]
         ]
   where
