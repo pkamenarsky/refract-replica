@@ -121,10 +121,12 @@ cabinet env lState = stateL lState $ \(CabinetState st) -> stateL (envLDraggedIn
           Nothing -> pure ()
       ]
       [ domPath $ \path -> div
-          [ style [ ("float", "left"), marginLeft (px 15), marginRight (px 15), marginTop (px 30), width (px 50), height (px 50), backgroundColor "#333" ]
+          [ style [ ("float", "left"), marginLeft (px 15), marginRight (px 15), marginTop (px 30), width (px 50), height (px 70) ]
           , shareable env (envGetBounds env path) inst
           ]
-          []
+          [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
+          , text (nameForInstance inst)
+          ]
       | (index, inst) <- zip [0..] st
       ]
   , div
@@ -158,6 +160,13 @@ componentForInstance env@(Env {..}) lInst = stateL lInst $ \inst -> stateL envLD
   InstanceCabinet st -> oneOrWarning st (envLValue % pathToLens st) (cabinet env)
   InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
+
+nameForInstance :: Instance -> Text
+nameForInstance InstanceEmpty = ""
+nameForInstance (InstanceTree path) = showPath path
+nameForInstance (InstanceCabinet path) = showPath path
+nameForInstance (InstanceSong path) = showPath path
+nameForInstance (InstanceInspector path _) = showPath path
 
 -- Tree ------------------------------------------------------------------------
 

@@ -67,6 +67,11 @@ pathToLens [] = castOptic A._JSON
 pathToLens (Key k:ps) = A.key k % pathToLens ps
 pathToLens (Index i:ps) = A.nth i % pathToLens ps
 
+showPath :: Path -> Text
+showPath (Key k:ps) = "." <> k <> showPath ps
+showPath (Index i:ps) = "[" <> pack (show i) <> "]" <> showPath ps
+showPath [] = ""
+
 --------------------------------------------------------------------------------
 
 data InspectorState = InspectorState
