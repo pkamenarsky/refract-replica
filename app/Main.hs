@@ -85,6 +85,9 @@ oneOrEmpty l f = state $ \st -> case preview l st of
   Nothing -> empty
   Just _ -> f (toLens (error "defaultComponent") l)
 
+fill :: [(Text, Text)]
+fill = [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0) ]
+
 -- Shareable -------------------------------------------------------------------
 
 shareable :: Env st -> IO Bounds -> Instance -> Props st
@@ -103,27 +106,54 @@ shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dra
     dragDragged _ x y = modify $ set (envLDraggedInst % _Just % _2 % dsDragOffset % _Just) (Point x y)
     dragDropped = modify $ set envLDraggedInst Nothing
 
+-- Cabinet ---------------------------------------------------------------------
+
+cabinet :: Env st -> Lens' st CabinetState -> Component st
+cabinet env lState = stateL lState $ \(CabinetState st) -> stateL (envLDraggedInst env) $ \draggedInst -> domPath $ \path -> div
+  [ style fill
+  , onTrackedDragEnd $ \_ -> case draggedInst of
+      Just (inst, _) -> modify $ over lState (\(CabinetState instss) -> CabinetState (inst:instss))
+      Nothing -> pure ()
+  ] $ mconcat
+  [ [ domPath $ \path -> div
+        [ style [ ("float", "left"), marginLeft (px 20), marginTop (px 20), width (px 50), height (px 50), backgroundColor "#333" ]
+        , shareable env (envGetBounds env path) inst
+        ]
+        []
+    | (index, inst) <- zip [0..] st
+    ]
+  , [ div
+        [ dragHandle
+        , shareable env (envGetBounds env path) (InstanceCabinet [Key "cabinet"])
+        ] []
+    ]
+  ]
+  where
+    fill = [ posAbsolute, left (px 0), top (px 20), right (px 0), bottom (px 0) ]
+
+    dragHandle = style
+      [ posAbsolute
+      , top (px 8), left (px 8), width (px 8), height (px 8)
+      , backgroundColor "#333"
+      ]
+
 -- Instances -------------------------------------------------------------------
 
 componentForInstance
   :: Env st
-  -> Instance
-  -> Maybe (Lens' st Instance)
+  -> Lens' st Instance
   -> Component st
-componentForInstance env@(Env {..}) inst mlInst = stateL envLDraggedInst $ \mDraggedInst -> case inst of
+componentForInstance env@(Env {..}) lInst = stateL lInst $ \inst -> stateL envLDraggedInst $ \mDraggedInst -> case inst of
   InstanceEmpty -> div
-    [ fill
-    , onTrackedDragEnd $ \_ -> case (mlInst, mDraggedInst) of
-        (Just lInst, Just (draggedInst, _)) -> modify $ set lInst draggedInst
+    [ style fill
+    , onTrackedDragEnd $ \_ -> case mDraggedInst of
+        Just (draggedInst, _) -> modify $ set lInst draggedInst
         _ -> pure ()
     ] []
   InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree mDraggedInst)
+  InstanceCabinet st -> oneOrWarning st (envLValue % pathToLens st) (cabinet env)
   InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
-  where
-    fill = style
-      [ posAbsolute, left (px 0), top (px 0), right (px 0), bottom (px 0)
-      ]
 
 -- Tree ------------------------------------------------------------------------
 
@@ -237,12 +267,12 @@ song env@(Env {..}) lSongState = div []
       ]
   ]
   where
-    frame = style $
+    frame = style
       [ posAbsolute
       , left (px 0), top (px 0), right (px 0), bottom (px 0)
       ]
 
-    dragHandle = style $
+    dragHandle = style
       [ posAbsolute
       , top (px 8), left (px 8), width (px 8), height (px 8)
       , backgroundColor "#333"
@@ -256,8 +286,8 @@ layout
   -> (st -> st)
   -> Component st
 layout env@(Env {..}) lLayoutState close = stateL lLayoutState $ \stLayoutState -> case stLayoutState of
-  LayoutInstance inst -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
-    [ [ div [ fill handleSize handleSize True ] [ componentForInstance env inst (Just $ unsafeToLens $ lLayoutState % _LayoutInstance) ] ]
+  LayoutInstance _ -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
+    [ [ div [ fill handleSize handleSize True ] [ componentForInstance env (unsafeToLens $ lLayoutState % _LayoutInstance) ] ]
 
     -- Split handles
     , [ div
@@ -340,7 +370,7 @@ layout env@(Env {..}) lLayoutState close = stateL lLayoutState $ \stLayoutState 
     handleColor = "#aaa"
 
     fill x y overflow = style
-      [ posAbsolute, left (px 0), top (px y), right (px x), bottom (px 0)
+      [ posAbsolute, left (px x), top (px y), right (px x), bottom (px y)
       , ("overflow", if overflow then "auto" else "hidden")
       ]
 
@@ -435,10 +465,10 @@ main = do
         , [ layout env layoutState id ]
 
         -- Dragged instance
-        , [ oneOrEmpty (draggedInstance % _Just) $ flip stateL $ \(inst, DraggableState (Rect x y w h) offset)  -> div
+        , [ oneOrEmpty (draggedInstance % _Just) $ \lDraggedInstance -> stateL lDraggedInstance $ \(_, DraggableState (Rect x y w h) offset)  -> div
               [ style [ posAbsolute, left (px (x + xo offset)), top (px (y + yo offset)), width (px w), height (px h), border "1px solid #777", ("pointer-events", "none") ]
               ]
-              [ componentForInstance env inst Nothing ]
+              [ componentForInstance env (lDraggedInstance % _1) ]
           ]
         ]
   where
@@ -474,7 +504,7 @@ main = do
       case store of
         Nothing -> do
           let st = defaultState
-                { _layoutState = LayoutHSplit 20 (LayoutInstance (InstanceSong [Key "song"])) (LayoutInstance InstanceEmpty)
+                { _layoutState = LayoutHSplit 20 (LayoutInstance (InstanceSong [Key "song"])) (LayoutInstance (InstanceCabinet [Key "cabinet"]))
                 }
           storeState st
           pure $ Just st

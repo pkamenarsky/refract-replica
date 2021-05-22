@@ -126,30 +126,26 @@ jsonToNodeState nn (A.Bool s) _ = NodeState nn False (NodeBool s)
 jsonToNodeState nn A.Null (NodeState _ mo (NodeString t)) = NodeState nn mo (NodeString "null")
 jsonToNodeState nn A.Null _ = NodeState nn False (NodeString "null")
 
+--------------------------------------------------------------------------------
+
 data SongState = SongState deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 defaultSongState :: SongState
 defaultSongState = SongState
 
-data PlaylistState = PlaylistState deriving (Show, Generic, A.FromJSON, A.ToJSON)
+--------------------------------------------------------------------------------
 
-data Data a = DataPath Path | forall b. DataF (Data b) (b -> a) | forall b. DataIso (Data b) (b -> a) (a -> b)
+data CabinetState = CabinetState [Instance] deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
-dataGetter :: Data a -> A.Value -> a
-dataGetter = undefined
+defaultCabinetState :: CabinetState
+defaultCabinetState = CabinetState []
 
--- only if there is an unbroken Iso chain
-dataSetter :: Data a -> Maybe (a -> A.Value -> A.Value)
-dataSetter = undefined
-
-data DraggableState = DraggableState
-  { _dsRect :: Rect
-  , _dsDragOffset :: Maybe Point
-  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
+--------------------------------------------------------------------------------
 
 data Instance
   = InstanceEmpty
   | InstanceTree Path
+  | InstanceCabinet Path
   | InstanceInspector Path Path
   | InstanceSong Path
   | InstancePlaylist [Path]
@@ -166,6 +162,11 @@ defaultLayoutState = LayoutInstance InstanceEmpty
 
 --------------------------------------------------------------------------------
 
+data DraggableState = DraggableState
+  { _dsRect :: Rect
+  , _dsDragOffset :: Maybe Point
+  } deriving (Show, Generic, A.ToJSON, A.FromJSON)
+
 type DraggedInstance = (Instance, DraggableState)
 
 data State = State
@@ -179,6 +180,7 @@ globalState = A.object
   [ "files" A..= jsonToNodeState "root" (A.toJSON defaultNodeState) (NodeState "" False (NodeArray False []))
   , "song" A..= defaultSongState
   , "inspector" A..= defaultInspectorState
+  , "cabinet" A..= defaultCabinetState
   ]
 
 defaultState = State
