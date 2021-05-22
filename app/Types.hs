@@ -152,6 +152,14 @@ data ProfileState = ProfileState
   , _pstAge :: Int
   } deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
+data ProfileEditState = ProfileEditState
+  { _pesEdited :: Bool
+  , _pesName :: Text
+  } deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+defaultProfileEditState :: ProfileEditState
+defaultProfileEditState = ProfileEditState False ""
+
 --------------------------------------------------------------------------------
 
 data Instance
@@ -161,7 +169,7 @@ data Instance
   | InstanceInspector Path Path
   | InstanceSong Path
   | InstancePlaylist [Path]
-  | InstanceProfile Path Bool Text
+  | InstanceProfile Path ProfileEditState
   deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 data LayoutState
@@ -215,5 +223,6 @@ makeLenses ''NodeState
 makeLenses ''Instance
 makePrisms ''LayoutState
 makeLenses ''ProfileState
+makeLenses ''ProfileEditState
 makeLenses ''State
 makePrisms ''Instance

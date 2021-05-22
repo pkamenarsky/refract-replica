@@ -129,7 +129,7 @@ componentForInstance env@(Env {..}) lInst = stateL lInst $ \inst -> stateL envLD
   InstanceCabinet st -> oneOrWarning st (envLValue % pathToLens st) (cabinet env st lInst)
   InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
-  InstanceProfile st _ v -> oneOrWarning st (envLValue % pathToLens st) (profile env st lInst)
+  InstanceProfile st _ -> oneOrWarning st (envLValue % pathToLens st) (profile env st (unsafeToLens $ lInst % _InstanceProfile % _2))
 
 icon t = div
   [ style [ ("float", "left"), width (px 50), height (px 70) ]
@@ -144,7 +144,7 @@ draggedComponentForInstance _ (InstanceTree path) = icon (showPath path)
 draggedComponentForInstance _ (InstanceCabinet path) = icon (showPath path)
 draggedComponentForInstance _ (InstanceSong path) = icon (showPath path)
 draggedComponentForInstance _ (InstanceInspector path _) = icon (showPath path) 
-draggedComponentForInstance v (InstanceProfile path _ _) = icon $ case preview (pathToLens path) v of
+draggedComponentForInstance v (InstanceProfile path _) = icon $ case preview (pathToLens path) v of
   Just (ProfileState name _) -> name
   _ -> showPath path
 
@@ -154,7 +154,7 @@ nameForInstance _ (InstanceTree path) = showPath path
 nameForInstance _ (InstanceCabinet path) = showPath path
 nameForInstance _ (InstanceSong path) = showPath path
 nameForInstance _ (InstanceInspector path _) = showPath path
-nameForInstance v (InstanceProfile path _ _) = case preview (pathToLens path) v of
+nameForInstance v (InstanceProfile path _) = case preview (pathToLens path) v of
   Just (ProfileState name _) -> name
   _ -> showPath path
 
@@ -211,28 +211,28 @@ inputOnEnter f lTmp = stateL lTmp $ \tmp -> input
   , value tmp
   ]
 
-profile :: Env st -> Path -> Lens' st Instance -> Lens' st ProfileState -> Component st
-profile env stPath lInst lState =
-  stateL lInst $ \(InstanceProfile _ edited _) ->
+profile :: Env st -> Path -> Lens' st ProfileEditState -> Lens' st ProfileState -> Component st
+profile env stPath lPes lState =
+  stateL lPes $ \pes ->
   stateL lState $ \(ProfileState name _) ->
   domPath $ \rootPath -> div
     [ style (fill 0) ]
     [ div
         [ style (fill 20 <> [("overflow", "auto")]) ]
         [ div [] [ text "Profile" ]
-        , if edited
-            then inputOnEnter (setValue pstName) (unsafeToLens $ lInst % _InstanceProfile % _3)
-            else div [ onDoubleClick $ \_ -> modify $ set (lInst % _InstanceProfile % _2) True ] [ text ("Name: " <> name) ]
+        , if _pesEdited pes
+            then inputOnEnter (setValue pstName) (lPes % pesName)
+            else div [ onDoubleClick $ \_ -> modify $ set (lPes % pesEdited) True ] [ text ("Name: " <> name) ]
         ]
     , div
         [ dragHandle
-        , shareable env (envGetBounds env rootPath) (InstanceProfile stPath False "")
+        , shareable env (envGetBounds env rootPath) (InstanceProfile stPath defaultProfileEditState)
         ] []
     ]
   where
     setValue l v = do
       modify $ set (lState % l) v
-      modify $ set (lInst % _InstanceProfile % _2) False
+      modify $ set (lPes % pesEdited) False
 
     fill y = [ posAbsolute, left (px 0), top (px y), right (px 0), bottom (px 0) ]
 
@@ -587,7 +587,7 @@ main = do
         Nothing -> do
           let st = defaultState
                 { _layoutState = LayoutHSplit 20
-                    (LayoutVSplit 50 (LayoutInstance (InstanceProfile [Key "god"] False "")) (LayoutInstance (InstanceSong [Key "song"])))
+                    (LayoutVSplit 50 (LayoutInstance (InstanceProfile [Key "god"] defaultProfileEditState)) (LayoutInstance (InstanceSong [Key "song"])))
                     (LayoutVSplit 50 (LayoutInstance (InstanceCabinet [Key "phil"])) (LayoutInstance (InstanceCabinet [Key "satan"])))
                 }
           storeState st
