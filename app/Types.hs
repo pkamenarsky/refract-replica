@@ -185,7 +185,8 @@ globalState = A.object
   [ "files" A..= jsonToNodeState "root" (A.toJSON defaultNodeState) (NodeState "" False (NodeArray False []))
   , "song" A..= defaultSongState
   , "inspector" A..= defaultInspectorState
-  , "cabinet" A..= defaultCabinetState
+  , "phil" A..= defaultCabinetState
+  , "satan" A..= defaultCabinetState
   ]
 
 defaultState = State

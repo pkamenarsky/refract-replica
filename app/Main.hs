@@ -113,8 +113,8 @@ shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dra
 
 -- Cabinet ---------------------------------------------------------------------
 
-cabinet :: Env st -> Lens' st CabinetState -> Component st
-cabinet env lState = stateL lState $ \(CabinetState st) -> stateL (envLDraggedInst env) $ \draggedInst -> domPath $ \path -> div
+cabinet :: Env st -> Path -> Lens' st Instance -> Lens' st CabinetState -> Component st
+cabinet env stPath lInst lState = stateL (envLValue env) $ \st -> stateL lState $ \(CabinetState instss) -> stateL (envLDraggedInst env) $ \draggedInst -> domPath $ \rootPath -> div
   [ style (fill 0) ]
   [ div
       [ style (fill 20 <> [("overflow", "auto")]) 
@@ -122,19 +122,21 @@ cabinet env lState = stateL lState $ \(CabinetState st) -> stateL (envLDraggedIn
           Just (inst, _) -> modify $ over lState (\(CabinetState instss) -> CabinetState (inst:instss))
           Nothing -> pure ()
       ]
-      [ domPath $ \path -> div
+      [ domPath $ \iconPath -> div
           [ style [ ("float", "left"), marginLeft (px 15), marginRight (px 15), marginTop (px 30), width (px 50), height (px 70) ]
-          , shareable env (envGetBounds env path) inst
-          , onDoubleClick $ \_ -> liftIO (print $ show inst)
+          , shareable env (envGetBounds env iconPath) inst
+          , onDoubleClick $ \_ -> case inst of
+              inst'@(InstanceCabinet _) -> modify $ set lInst inst'
+              _ -> pure ()
           ]
           [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
           , text (nameForInstance inst)
           ]
-      | (index, inst) <- zip [0..] st
+      | (index, inst) <- zip [0..] instss
       ]
   , div
       [ dragHandle
-      , shareable env (envGetBounds env path) (InstanceCabinet [Key "cabinet"])
+      , shareable env (envGetBounds env rootPath) (InstanceCabinet stPath)
       ] []
   ]
   where
@@ -160,7 +162,7 @@ componentForInstance env@(Env {..}) lInst = stateL lInst $ \inst -> stateL envLD
         _ -> pure ()
     ] []
   InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree mDraggedInst)
-  InstanceCabinet st -> oneOrWarning st (envLValue % pathToLens st) (cabinet env)
+  InstanceCabinet st -> oneOrWarning st (envLValue % pathToLens st) (cabinet env st lInst)
   InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env)
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
 
@@ -517,7 +519,9 @@ main = do
       case store of
         Nothing -> do
           let st = defaultState
-                { _layoutState = LayoutHSplit 20 (LayoutInstance (InstanceSong [Key "song"])) (LayoutInstance (InstanceCabinet [Key "cabinet"]))
+                { _layoutState = LayoutHSplit 20
+                    (LayoutInstance (InstanceSong [Key "song"]))
+                    (LayoutVSplit 50 (LayoutInstance (InstanceCabinet [Key "phil"])) (LayoutInstance (InstanceCabinet [Key "satan"])))
                 }
           storeState st
           pure $ Just st
