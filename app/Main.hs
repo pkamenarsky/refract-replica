@@ -112,82 +112,6 @@ shareable Env {..} getParentBounds inst = onMouseDown $ \e -> envStartDrag e dra
       modify $ set (envLDraggedInst % _Just % _2 % dsDragOffset % _Just) (Point x y)
     dragDropped = modify $ set envLDraggedInst Nothing
 
--- Cabinet ---------------------------------------------------------------------
-
-cabinet :: Env st -> Path -> Lens' st Instance -> Lens' st CabinetState -> Component st
-cabinet env stPath lInst lState = stateL (envLValue env) $ \st -> stateL lState $ \(CabinetState instss) -> stateL (envLDraggedInst env) $ \draggedInst -> domPath $ \rootPath -> div
-  [ style (fill 0) ]
-  [ div
-      [ style (fill 20 <> [("overflow", "auto")]) 
-      , onTrackedDragEnd $ \_ -> case draggedInst of
-          Just (inst, _) -> modify $ over lState (\(CabinetState instss) -> CabinetState (inst:instss))
-          Nothing -> pure ()
-      ]
-      [ domPath $ \iconPath -> div
-          [ style [ ("float", "left"), marginLeft (px 15), marginRight (px 15), marginTop (px 30), width (px 50), height (px 70) ]
-          , shareable env (envGetBounds env iconPath) inst
-          , onDoubleClick $ \_ -> case inst of
-              inst'@(InstanceCabinet _) -> modify $ set lInst inst'
-              _ -> pure ()
-          ]
-          [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
-          , text (nameForInstance inst)
-          ]
-      | (index, inst) <- zip [0..] instss
-      ]
-  , div
-      [ dragHandle
-      , shareable env (envGetBounds env rootPath) (InstanceCabinet stPath)
-      ] []
-  ]
-  where
-    fill y = [ posAbsolute, left (px 0), top (px y), right (px 0), bottom (px 0) ]
-
-    dragHandle = style
-      [ posAbsolute, top (px handleSize), left (px handleSize), width (px handleSize), height (px handleSize)
-      , backgroundColor "#333"
-      , ("border-radius", px handleSize)
-      ]
-
--- Profile ---------------------------------------------------------------------
-
-inputOnEnter :: (Text -> ST.StateT st IO ()) -> Lens' st Text -> Component st
-inputOnEnter f lTmp = stateL lTmp $ \tmp -> input
-  [ autofocus True
-  , onInput $ \e -> modify $ set lTmp (fromMaybe "" $ targetValue $ target e)
-  , onKeyDown $ \e -> when (kbdKey e == "Enter") (f tmp)
-  , value tmp
-  ]
-
-profile :: Env st -> Path -> Lens' st Instance -> Lens' st ProfileState -> Component st
-profile env stPath lInst lState = stateL lInst $ \(InstanceProfile _ edited _) -> stateL lState $ \(ProfileState name _) -> domPath $ \rootPath -> div
-  [ style (fill 0) ]
-  [ div
-      [ style (fill 20 <> [("overflow", "auto")]) ]
-      [ div [] [ text "Profile" ]
-      , if edited
-          then inputOnEnter (setValue pstName) (unsafeToLens $ lInst % _InstanceProfile % _3)
-          else div [ onDoubleClick $ \_ -> modify $ set (lInst % _InstanceProfile % _2) True ] [ text ("Name: " <> name) ]
-      ]
-  , div
-      [ dragHandle
-      , shareable env (envGetBounds env rootPath) (InstanceProfile stPath False "")
-      ] []
-  ]
-  where
-    setValue l v = do
-      modify $ set (lState % l) v
-      modify $ set (lInst % _InstanceProfile % _2) False
-
-    fill y = [ posAbsolute, left (px 0), top (px y), right (px 0), bottom (px 0) ]
-
-    dragHandle = style
-      [ posAbsolute, top (px handleSize), left (px handleSize), width (px handleSize), height (px handleSize)
-      , backgroundColor "#333"
-      , ("border-radius", px handleSize)
-      ]
-
-
 -- Instances -------------------------------------------------------------------
 
 componentForInstance
@@ -207,46 +131,116 @@ componentForInstance env@(Env {..}) lInst = stateL lInst $ \inst -> stateL envLD
   InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
   InstanceProfile st _ v -> oneOrWarning st (envLValue % pathToLens st) (profile env st lInst)
 
-draggedComponentForInstance :: Instance -> Component st
-draggedComponentForInstance InstanceEmpty = empty
-draggedComponentForInstance (InstanceTree path) = div
+icon t = div
   [ style [ ("float", "left"), width (px 50), height (px 70) ]
   ]
   [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
-  , text (showPath path)
-  ]
-draggedComponentForInstance (InstanceCabinet path) = div
-  [ style [ ("float", "left"), width (px 50), height (px 70) ]
-  ]
-  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
-  , text (showPath path)
-  ]
-draggedComponentForInstance (InstanceSong path) = div
-  [ style [ ("float", "left"), width (px 50), height (px 70) ]
-  ]
-  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
-  , text (showPath path)
-  ]
-draggedComponentForInstance (InstanceInspector path _) = div
-  [ style [ ("float", "left"), width (px 50), height (px 70) ]
-  ]
-  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
-  , text (showPath path)
-  ]
-draggedComponentForInstance (InstanceProfile path _ _) = div
-  [ style [ ("float", "left"), width (px 50), height (px 70) ]
-  ]
-  [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
-  , text (showPath path)
+  , text t
   ]
 
-nameForInstance :: Instance -> Text
-nameForInstance InstanceEmpty = ""
-nameForInstance (InstanceTree path) = showPath path
-nameForInstance (InstanceCabinet path) = showPath path
-nameForInstance (InstanceSong path) = showPath path
-nameForInstance (InstanceInspector path _) = showPath path
-nameForInstance (InstanceProfile path _ _) = showPath path
+draggedComponentForInstance :: A.Value -> Instance -> Component st
+draggedComponentForInstance _ InstanceEmpty = empty
+draggedComponentForInstance _ (InstanceTree path) = icon (showPath path)
+draggedComponentForInstance _ (InstanceCabinet path) = icon (showPath path)
+draggedComponentForInstance _ (InstanceSong path) = icon (showPath path)
+draggedComponentForInstance _ (InstanceInspector path _) = icon (showPath path) 
+draggedComponentForInstance v (InstanceProfile path _ _) = icon $ case preview (pathToLens path) v of
+  Just (ProfileState name _) -> name
+  _ -> showPath path
+
+nameForInstance :: A.Value -> Instance -> Text
+nameForInstance _ InstanceEmpty = ""
+nameForInstance _ (InstanceTree path) = showPath path
+nameForInstance _ (InstanceCabinet path) = showPath path
+nameForInstance _ (InstanceSong path) = showPath path
+nameForInstance _ (InstanceInspector path _) = showPath path
+nameForInstance v (InstanceProfile path _ _) = case preview (pathToLens path) v of
+  Just (ProfileState name _) -> name
+  _ -> showPath path
+
+-- Cabinet ---------------------------------------------------------------------
+
+cabinet :: Env st -> Path -> Lens' st Instance -> Lens' st CabinetState -> Component st
+cabinet env stPath lInst lState =
+  stateL (envLValue env) $ \st ->
+  stateL lState $ \(CabinetState instss) ->
+  stateL (envLDraggedInst env) $ \draggedInst ->
+  domPath $ \rootPath -> div
+    [ style (fill 0) ]
+    [ div
+        [ style (fill 20 <> [("overflow", "auto")]) 
+        , onTrackedDragEnd $ \_ -> case draggedInst of
+            Just (inst, _) -> modify $ over lState (\(CabinetState instss) -> CabinetState (instss <> [inst]))
+            Nothing -> pure ()
+        ]
+        [ domPath $ \iconPath -> div
+            [ style [ ("float", "left"), marginLeft (px 15), marginRight (px 15), marginTop (px 30), width (px 50), height (px 70) ]
+            , shareable env (envGetBounds env iconPath) inst
+            , onDoubleClick $ \_ -> case inst of
+                inst'@(InstanceCabinet _) -> modify $ set lInst inst'
+                _ -> pure ()
+            ]
+            [ div [ style [ width (px 50), height (px 50), backgroundColor "#333" ] ] []
+            , text (nameForInstance st inst)
+            ]
+        | (index, inst) <- zip [0..] instss
+        ]
+    , div
+        [ dragHandle
+        , shareable env (envGetBounds env rootPath) (InstanceCabinet stPath)
+        ] []
+    ]
+  where
+    fill y = [ posAbsolute, left (px 0), top (px y), right (px 0), bottom (px 0) ]
+
+    dragHandle = style
+      [ posAbsolute, top (px handleSize), left (px handleSize), width (px handleSize), height (px handleSize)
+      , backgroundColor "#333"
+      , ("border-radius", px handleSize)
+      ]
+
+-- Profile ---------------------------------------------------------------------
+
+inputOnEnter :: (Text -> ST.StateT st IO ()) -> Lens' st Text -> Component st
+inputOnEnter f lTmp = stateL lTmp $ \tmp -> input
+  [ autofocus True
+  , onInput $ \e -> modify $ set lTmp (fromMaybe "" $ targetValue $ target e)
+  , onKeyDown $ \e -> when (kbdKey e == "Enter") $ do
+      modify $ set lTmp ""
+      f tmp
+  , value tmp
+  ]
+
+profile :: Env st -> Path -> Lens' st Instance -> Lens' st ProfileState -> Component st
+profile env stPath lInst lState =
+  stateL lInst $ \(InstanceProfile _ edited _) ->
+  stateL lState $ \(ProfileState name _) ->
+  domPath $ \rootPath -> div
+    [ style (fill 0) ]
+    [ div
+        [ style (fill 20 <> [("overflow", "auto")]) ]
+        [ div [] [ text "Profile" ]
+        , if edited
+            then inputOnEnter (setValue pstName) (unsafeToLens $ lInst % _InstanceProfile % _3)
+            else div [ onDoubleClick $ \_ -> modify $ set (lInst % _InstanceProfile % _2) True ] [ text ("Name: " <> name) ]
+        ]
+    , div
+        [ dragHandle
+        , shareable env (envGetBounds env rootPath) (InstanceProfile stPath False "")
+        ] []
+    ]
+  where
+    setValue l v = do
+      modify $ set (lState % l) v
+      modify $ set (lInst % _InstanceProfile % _2) False
+
+    fill y = [ posAbsolute, left (px 0), top (px y), right (px 0), bottom (px 0) ]
+
+    dragHandle = style
+      [ posAbsolute, top (px handleSize), left (px handleSize), width (px handleSize), height (px handleSize)
+      , backgroundColor "#333"
+      , ("border-radius", px handleSize)
+      ]
 
 -- Tree ------------------------------------------------------------------------
 
@@ -556,7 +550,7 @@ main = do
         , [ oneOrEmpty (draggedInstance % _Just) $ \lDraggedInstance -> stateL lDraggedInstance $ \(stDraggedInstance, DraggableState (Rect x y w h) offset)  -> div
               [ style [ posAbsolute, left (px (x + xo offset)), top (px (y + yo offset)), width (px w), height (px h), ("pointer-events", "none") ]
               ]
-              [ draggedComponentForInstance stDraggedInstance ]
+              [ draggedComponentForInstance (_global st) stDraggedInstance ]
           ]
         ]
   where
