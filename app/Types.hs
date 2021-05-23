@@ -133,10 +133,9 @@ jsonToNodeState nn A.Null _ = NodeState nn False (NodeString "null")
 
 --------------------------------------------------------------------------------
 
-data SongState = SongState deriving (Show, Generic, A.FromJSON, A.ToJSON)
+data SongState = SongState Text Int deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
-defaultSongState :: SongState
-defaultSongState = SongState
+data PlaylistState = PlaylistState Text [Path] deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 --------------------------------------------------------------------------------
 
@@ -168,7 +167,7 @@ data Instance
   | InstanceCabinet Path
   | InstanceInspector Path Path
   | InstanceSong Path
-  | InstancePlaylist [Path]
+  | InstancePlaylist Path
   | InstanceProfile Path ProfileEditState
   deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
@@ -199,7 +198,12 @@ data State = State
 globalState :: A.Value
 globalState = A.object
   [ "files" A..= jsonToNodeState "root" (A.toJSON defaultNodeState) (NodeState "" False (NodeArray False []))
-  , "song" A..= defaultSongState
+  , "song1" A..= SongState "Song1" 666
+  , "song2" A..= SongState "Song1" 666
+  , "playlist" A..= PlaylistState "Playlist1"
+       [ [Key "song1"]
+       , [Key "song2"]
+       ]
   , "inspector" A..= defaultInspectorState
   , "phil" A..= defaultCabinetState
   , "satan" A..= defaultCabinetState
