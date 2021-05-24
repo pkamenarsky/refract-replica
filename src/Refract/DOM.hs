@@ -4,6 +4,7 @@ module Refract.DOM where
 
 import qualified Control.Monad.Trans.State as ST
 
+import qualified Data.Aeson as A
 import qualified Data.Map as M
 import qualified Data.Text as T
 
@@ -26,6 +27,7 @@ elWithNamespace ns name props children = Component $ \path setState st ->
       name
       (M.unions $ map (toProps setState st) props)
       ns
+      A.Null
       $ mconcat
           [ runComponent child (i:path) setState st
           | (i, child) <- zip [0..] children
