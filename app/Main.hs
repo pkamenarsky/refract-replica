@@ -118,18 +118,20 @@ componentForInstance
   :: Env st
   -> Lens' st Instance
   -> Component st
-componentForInstance env@(Env {..}) lInst = getL lInst $ \inst -> getL envLDraggedInst $ \mDraggedInst -> case inst of
-  InstanceEmpty -> div
-    [ style fill
-    , onTrackedDragEnd $ \_ -> case mDraggedInst of
-        Just (draggedInst, _) -> modify $ set lInst draggedInst
-        _ -> pure ()
-    ] []
-  InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree mDraggedInst)
-  InstanceCabinet st -> oneOrWarning st (envLValue % pathToLens st) (cabinet env st lInst)
-  InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env st)
-  InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v))
-  InstanceProfile st _ -> oneOrWarning st (envLValue % pathToLens st) (profile env st (unsafeToLens $ lInst % _InstanceProfile % _2))
+componentForInstance env@(Env {..}) lInst =
+  getL lInst $ \inst ->
+  getL envLDraggedInst $ \mDraggedInst -> case inst of
+    InstanceEmpty -> div
+      [ style fill
+      , onTrackedDragEnd $ \_ -> case mDraggedInst of
+          Just (draggedInst, _) -> modify $ set lInst draggedInst
+          _ -> pure ()
+      ] []
+    InstanceTree st -> oneOrWarning st (envLValue % pathToLens st) (showTree mDraggedInst)
+    InstanceCabinet st -> oneOrWarning st (envLValue % pathToLens st) (cabinet env st lInst)
+    InstanceSong st -> oneOrWarning st (envLValue % pathToLens st) (song env st)
+    InstanceInspector st v -> oneOrWarning st (envLValue % pathToLens st) (inspector mDraggedInst (envLValue % pathToLens v) lInst)
+    InstanceProfile st _ -> oneOrWarning st (envLValue % pathToLens st) (profile env st (unsafeToLens $ lInst % _InstanceProfile % _2))
 
 icon t = div
   [ style [ ("float", "left"), width (px 50), height (px 70) ]
@@ -161,12 +163,12 @@ nameForInstance v (InstanceProfile path _) = case preview (pathToLens path) v of
 -- Cabinet ---------------------------------------------------------------------
 
 cabinet :: Env st -> Path -> Lens' st Instance -> Lens' st CabinetState -> Component st
-cabinet env stPath lInst lState =
+cabinet env path lInst lState =
   getL (envLValue env) $ \st ->
   getL lState $ \(CabinetState instss) ->
   getL (envLDraggedInst env) $ \draggedInst ->
 
-  domPath $ \rootPath -> div
+  withRef $ \ref -> div
     [ style (fill 0) ]
     [ div
         [ style (fill 20 <> [("overflow", "auto")]) 
@@ -174,9 +176,9 @@ cabinet env stPath lInst lState =
             Just (inst, _) -> modify $ over lState (\(CabinetState instss) -> CabinetState (instss <> [inst]))
             Nothing -> pure ()
         ]
-        [ domPath $ \iconPath -> div
+        [ withRef $ \iconRef -> div
             [ style [ ("float", "left"), marginLeft (px 15), marginRight (px 15), marginTop (px 30), width (px 50), height (px 70) ]
-            , shareable env (envGetBounds env iconPath) inst
+            , shareable env (envGetBounds env iconRef) inst
             , onDoubleClick $ \_ -> case inst of
                 inst'@(InstanceCabinet _) -> modify $ set lInst inst'
                 _ -> pure ()
@@ -188,7 +190,7 @@ cabinet env stPath lInst lState =
         ]
     , div
         [ dragHandle
-        , shareable env (envGetBounds env rootPath) (InstanceCabinet stPath)
+        , shareable env (envGetBounds env ref) (InstanceCabinet path)
         ] []
     ]
   where
@@ -213,11 +215,11 @@ inputOnEnter f lTmp = getL lTmp $ \tmp -> input
   ]
 
 profile :: Env st -> Path -> Lens' st ProfileEditState -> Lens' st ProfileState -> Component st
-profile env stPath lPes lState =
+profile env path lPes lState =
   getL lPes $ \pes ->
   getL lState $ \(ProfileState name _) ->
 
-  domPath $ \rootPath -> div
+  withRef $ \ref -> div
     [ style (fill 0 0) ]
     [ div
         [ style (fill 15 30 <> [("overflow", "auto")]) ]
@@ -228,7 +230,7 @@ profile env stPath lPes lState =
         ]
     , div
         [ dragHandle
-        , shareable env (envGetBounds env rootPath) (InstanceProfile stPath defaultProfileEditState)
+        , shareable env (envGetBounds env ref) (InstanceProfile path defaultProfileEditState)
         ] []
     ]
   where
@@ -288,16 +290,23 @@ showTree draggedInst l = div
           , ("user-select", "none")
           ]
 
-inspector :: Maybe DraggedInstance -> AffineTraversal' st A.Value -> Lens' st InspectorState -> Component st
-inspector draggedInst lv l = div
-  [ onTrackedDragEnd $ \e -> case draggedInst of
-      Just inst -> do
-        modify $ set lv A.Null
-        modify $ set l defaultInspectorState
-      Nothing -> pure ()
+inspector :: Maybe DraggedInstance -> AffineTraversal' st A.Value -> Lens' st Instance -> Lens' st InspectorState -> Component st
+inspector draggedInst lv lInst l = div
+  [ style fill
+  , onTrackedDragEnd $ \e -> case fst <$> draggedInst of
+      Just (InstanceTree path) -> setPath path
+      Just (InstanceCabinet path) -> setPath path
+      Just (InstanceSong path) -> setPath path
+      Just (InstanceInspector path _) -> setPath path
+      Just (InstanceProfile path _) -> setPath path
+      _ -> pure ()
   ]
   [ go "root" "root" lv ]
   where
+    setPath path = do
+      modify $ set (lInst % _InstanceInspector % _2) path 
+      modify $ set l defaultInspectorState
+
     go path nodeName lv = state $ \st -> let value = preview lv st in getL l $ \InspectorState {..} -> div [ frame ] $ mconcat
       [ [ span
             [ style [ ("border-top", if Just path == _inspMouseOverNode && isJust draggedInst then "2px solid #333" else "") ]
@@ -345,10 +354,10 @@ inspector draggedInst lv l = div
 
 song :: Env st -> Path -> Lens' st SongState -> Component st
 song env@(Env {..}) path lSongState = div []
-  [ domPath $ \rootPath -> div [ frame ]
+  [ withRef $ \ref -> div [ frame ]
       [ div
           [ dragHandle
-          , shareable env (envGetBounds rootPath) (InstanceSong path)
+          , shareable env (envGetBounds ref) (InstanceSong path)
           ]
           []
       ]
@@ -375,17 +384,17 @@ layout
   -> (st -> st)
   -> Component st
 layout env@(Env {..}) lLayoutState close = getL lLayoutState $ \stLayoutState -> case stLayoutState of
-  LayoutInstance _ -> domPath $ \path -> div [ fill 0 0 False ] $ mconcat
+  LayoutInstance _ -> withRef $ \ref -> div [ fill 0 0 False ] $ mconcat
     [ [ div [ fill 0 0 True ] [ componentForInstance env (unsafeToLens $ lLayoutState % _LayoutInstance) ] ]
 
     -- Split handles
     , [ div
           [ rightSplitHandle
-          , onMouseDown $ \e -> envStartDrag e (dragStartedSplitX stLayoutState e (envGetBounds path)) (dragDraggedX lLayoutState) dragFinished
+          , onMouseDown $ \e -> envStartDrag e (dragStartedSplitX stLayoutState e (envGetBounds ref)) (dragDraggedX lLayoutState) dragFinished
           ] []
       , div
           [ topSplitHandle
-          , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY stLayoutState e (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished
+          , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY stLayoutState e (envGetBounds ref)) (dragDraggedY lLayoutState) dragFinished
           ] []
       ]
 
@@ -397,33 +406,33 @@ layout env@(Env {..}) lLayoutState close = getL lLayoutState $ \stLayoutState ->
           []
       ]
     ]
-  LayoutHSplit x leftLayout rightLayout -> domPath $ \path -> div [ fill 0 0 False ]
+  LayoutHSplit x leftLayout rightLayout -> withRef $ \ref -> div [ fill 0 0 False ]
     [ div [ hsplitLeft x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _2) (over lLayoutState (const rightLayout)) ]
     , div [ hsplitRight x ] [ layout env (unsafeToLens $ lLayoutState % _LayoutHSplit % _3) (over lLayoutState (const leftLayout)) ]
     , div [ dragBarH x ] []
     , div
         [ dragBarHDraggable x
-        , onMouseDown $ \e -> envStartDrag e (dragStartedX e (envGetBounds path)) (dragDraggedX lLayoutState) dragFinished
+        , onMouseDown $ \e -> envStartDrag e (dragStartedX e (envGetBounds ref)) (dragDraggedX lLayoutState) dragFinished
         ]
         []
     , div
         [ dragBarHSplitHandle x
-        , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY stLayoutState e (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished
+        , onMouseDown $ \e -> envStartDrag e (dragStartedSplitY stLayoutState e (envGetBounds ref)) (dragDraggedY lLayoutState) dragFinished
         ]
         []
     ]
-  LayoutVSplit y topLayout bottomLayout -> domPath $ \path -> div [ fill 0 0 False ]
+  LayoutVSplit y topLayout bottomLayout -> withRef $ \ref -> div [ fill 0 0 False ]
     [ div [ vsplitTop y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _2) (over lLayoutState (const bottomLayout)) ]
     , div [ vsplitBottom y ] [ layout env (unsafeToLens $ lLayoutState % _LayoutVSplit % _3) (over lLayoutState (const topLayout)) ]
     , div [ dragBarV y ] []
     , div
         [ dragBarVDraggable y
-        , onMouseDown $ \e -> envStartDrag e (dragStartedY e (envGetBounds path)) (dragDraggedY lLayoutState) dragFinished
+        , onMouseDown $ \e -> envStartDrag e (dragStartedY e (envGetBounds ref)) (dragDraggedY lLayoutState) dragFinished
         ]
         []
     , div
         [ dragBarVSplitHandle y
-        , onMouseDown $ \e -> envStartDrag e (dragStartedSplitX stLayoutState e (envGetBounds path)) (dragDraggedX lLayoutState) dragFinished
+        , onMouseDown $ \e -> envStartDrag e (dragStartedSplitX stLayoutState e (envGetBounds ref)) (dragDraggedX lLayoutState) dragFinished
         ]
         []
     ]
@@ -592,7 +601,7 @@ main = do
           let st = defaultState
                 { _layoutState = LayoutHSplit 20
                     (LayoutVSplit 50 (LayoutInstance (InstanceProfile [Key "god"] defaultProfileEditState)) (LayoutInstance (InstanceSong [Key "song1"])))
-                    (LayoutVSplit 50 (LayoutInstance (InstanceCabinet [Key "phil"])) (LayoutInstance (InstanceCabinet [Key "satan"])))
+                    (LayoutVSplit 50 (LayoutVSplit 50 (LayoutInstance (InstanceInspector [Key "inspector"] [])) (LayoutInstance (InstanceCabinet [Key "phil"]))) (LayoutInstance (InstanceCabinet [Key "satan"])))
                 }
           storeState st
           pure $ Just st

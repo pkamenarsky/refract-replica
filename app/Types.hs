@@ -226,6 +226,7 @@ makeLenses ''InspectorState
 makeLenses ''NodeState
 makeLenses ''Instance
 makePrisms ''LayoutState
+makeLenses ''LayoutState
 makeLenses ''ProfileState
 makeLenses ''ProfileEditState
 makeLenses ''State

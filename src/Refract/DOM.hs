@@ -11,12 +11,12 @@ import qualified Data.Text as T
 import Refract.DOM.Props (Props(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
 import qualified Replica.VDOM as VDOM
 
-type DomPath = [Int]
+newtype Ref = Ref [Int]
 
-newtype Component st = Component { runComponent :: DomPath -> (st -> IO ()) -> st -> VDOM.HTML }
+newtype Component st = Component { runComponent :: [Int] -> (st -> IO ()) -> st -> VDOM.HTML }
 
-domPath :: (DomPath -> Component st) -> Component st
-domPath f = Component $ \path setState st -> runComponent (f path) path setState st
+withRef :: (Ref -> Component st) -> Component st
+withRef f = Component $ \path setState st -> runComponent (f (Ref path)) path setState st
 
 el :: T.Text -> [Props st] -> [Component st] -> Component st
 el = elWithNamespace Nothing
@@ -27,7 +27,6 @@ elWithNamespace ns name props children = Component $ \path setState st ->
       name
       (M.unions $ map (toProps setState st) props)
       ns
-      A.Null
       $ mconcat
           [ runComponent child (i:path) setState st
           | (i, child) <- zip [0..] children

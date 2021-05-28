@@ -8,6 +8,8 @@ import           Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import           Control.Concurrent.STM (atomically, retry)
 import           Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 
+import qualified Data.Aeson as A
+import qualified Data.Map as M
 import           Data.Foldable (asum)
 import qualified Data.Text as T
 
@@ -28,12 +30,19 @@ state f = Component $ \path setState st -> runComponent (f st) path setState st
 state' :: (st -> (st -> IO ()) -> Component st) -> Component st
 state' f = Component $ \path setState st -> runComponent (f st setState) path setState st
 
+-- type Component' = Component (M.Map T.Text A.Value)
+-- 
+-- stateful :: A.FromJSON st => A.ToJSON st => T.Text -> st -> (st -> (st -> IO ()) -> Component') -> Component'
+-- stateful k initial cmp = state' $ \st setState -> case A.fromJSON <$> M.lookup k st of
+--   Just (A.Success v) -> cmp v (setState . flip (M.insert k) st . A.toJSON)
+--   _ -> cmp initial (setState . flip (M.insert k) st . A.toJSON)
+
 type Bounds = (Double, Double, Double, Double)
 
-type GetBounds = Refract.DomPath -> IO (Double, Double, Double, Double)
+type GetBounds = Refract.Ref -> IO (Double, Double, Double, Double)
 
 getBounds :: R.Context -> GetBounds
-getBounds ctx path = do
+getBounds ctx (Refract.Ref path) = do
   rectRef <- newEmptyMVar
   cb <- R.registerCallback ctx (putMVar rectRef)
   R.call ctx (cb, reverse path) js

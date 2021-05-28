@@ -348,7 +348,7 @@ startTrackedDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = d
         \   window.removeEventListener('mousemove', drag); \n\
         \   window.removeEventListener('mouseup', up); \n\
         \   const element = document.elementFromPoint(e.clientX, e.clientY); \n\
-        \   const event = new Event('trackeddragend');; \n\
+        \   const event = new CustomEvent('trackeddragend', { bubbles: true }); \n\
         \   element.dispatchEvent(event); \n\
         \   callCallback(arg, null, true); \n\
         \ }; \n\
