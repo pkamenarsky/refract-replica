@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.35.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b3ae4a0130e82f06a34a5916f492741b8b1c91564fb9ed58a41b89a9289f6133
+-- hash: f38c966a1a432d482da50c8fcd57f4664911dd28453b435d1b9acc241bd69f3a
 
 name:           refract-replica
 version:        0.1.0.0
@@ -31,6 +31,7 @@ library
       Refract.DOM
       Refract.DOM.Events
       Refract.DOM.Props
+      Refract.Ref
   other-modules:
       Paths_refract_replica
   hs-source-dirs:
@@ -39,6 +40,7 @@ library
       aeson
     , base >=4.7 && <5
     , containers
+    , mtl
     , replica
     , stm
     , text
@@ -65,6 +67,7 @@ executable refract-replica-exe
     , bytestring
     , containers
     , foreign-store
+    , mtl
     , optics
     , refract-replica
     , replica
@@ -91,6 +94,7 @@ test-suite refract-replica-test
       aeson
     , base >=4.7 && <5
     , containers
+    , mtl
     , refract-replica
     , replica
     , stm
