@@ -11,7 +11,7 @@ import           Control.Concurrent.MVar
 import           Control.Concurrent.STM       (atomically)
 import           Control.Concurrent.STM.TChan (TChan, writeTChan)
 
-import           Refract.DOM.Props            (Props, Prop(PropEvent), props)
+import           Refract.DOM.Props            (Mod, Props, Prop(PropEvent), props, runModBlocking)
 
 import           Data.Aeson                   ((.:), (.:?))
 import qualified Data.Aeson                as A
@@ -139,157 +139,157 @@ defaultOptions = EventOptions
 --
 -- <https://developer.mozilla.org/en-US/docs/Web/Events/blur>
 --
-onBlur :: (BaseEvent -> ST.StateT st IO ()) -> Props st
+onBlur :: (BaseEvent -> Mod st ()) -> Props st
 onBlur f = props "onBlur" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onBlurWithOptions :: EventOptions -> (BaseEvent -> ST.StateT st IO ()) -> Props st
+onBlurWithOptions :: EventOptions -> (BaseEvent -> Mod st ()) -> Props st
 onBlurWithOptions opts f = props "onBlur" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/click
-onClick :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onClick :: (MouseEvent -> Mod st ()) -> Props st
 onClick f = props "onClick" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onClickWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onClickWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onClickWithOptions opts f = props "onClick" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/focus
-onFocus :: (BaseEvent -> ST.StateT st IO ()) -> Props st
+onFocus :: (BaseEvent -> Mod st ()) -> Props st
 onFocus f = props "onFocus" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onFocusWithOptions :: EventOptions -> (BaseEvent -> ST.StateT st IO ()) -> Props st
+onFocusWithOptions :: EventOptions -> (BaseEvent -> Mod st ()) -> Props st
 onFocusWithOptions opts f = props "onFocus" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dblclick
-onDoubleClick :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDoubleClick :: (MouseEvent -> Mod st ()) -> Props st
 onDoubleClick f = props "onDblClick" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onDoubleClickWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDoubleClickWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onDoubleClickWithOptions opts f = props "onDblClick" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/input
-onInput :: (BaseEvent -> ST.StateT st IO ()) -> Props st
+onInput :: (BaseEvent -> Mod st ()) -> Props st
 onInput f = props "onInput" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onInputWithOptions :: EventOptions -> (BaseEvent -> ST.StateT st IO ()) -> Props st
+onInputWithOptions :: EventOptions -> (BaseEvent -> Mod st ()) -> Props st
 onInputWithOptions opts f = props "onInput" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/change
-onChange :: (BaseEvent -> ST.StateT st IO ()) -> Props st
+onChange :: (BaseEvent -> Mod st ()) -> Props st
 onChange f = props "onChange" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onChangeWithOptions :: EventOptions -> (BaseEvent -> ST.StateT st IO ()) -> Props st
+onChangeWithOptions :: EventOptions -> (BaseEvent -> Mod st ()) -> Props st
 onChangeWithOptions opts f = props "onChange" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/keydown
-onKeyDown :: (KeyboardEvent -> ST.StateT st IO ()) -> Props st
+onKeyDown :: (KeyboardEvent -> Mod st ()) -> Props st
 onKeyDown f = props "onKeyDown" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onKeyDownWithOptions :: EventOptions -> (KeyboardEvent -> ST.StateT st IO ()) -> Props st
+onKeyDownWithOptions :: EventOptions -> (KeyboardEvent -> Mod st ()) -> Props st
 onKeyDownWithOptions opts f = props "onKeyDown" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/keypress
-onKeyPress :: (KeyboardEvent -> ST.StateT st IO ()) -> Props st
+onKeyPress :: (KeyboardEvent -> Mod st ()) -> Props st
 onKeyPress f = props "onKeyPress" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onKeyPressWithOptions :: EventOptions -> (KeyboardEvent -> ST.StateT st IO ()) -> Props st
+onKeyPressWithOptions :: EventOptions -> (KeyboardEvent -> Mod st ()) -> Props st
 onKeyPressWithOptions opts f = props "onKeyPress" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/keyup
-onKeyUp :: (KeyboardEvent -> ST.StateT st IO ()) -> Props st
+onKeyUp :: (KeyboardEvent -> Mod st ()) -> Props st
 onKeyUp f = props "onKeyUp" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onKeyUpWithOptions :: EventOptions -> (KeyboardEvent -> ST.StateT st IO ()) -> Props st
+onKeyUpWithOptions :: EventOptions -> (KeyboardEvent -> Mod st ()) -> Props st
 onKeyUpWithOptions opts f = props "onKeyUp" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseup
-onMouseUp :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseUp :: (MouseEvent -> Mod st ()) -> Props st
 onMouseUp f = props "onMouseUp" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onMouseUpWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseUpWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onMouseUpWithOptions opts f = props "onMouseUp" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mousedown
-onMouseDown :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseDown :: (MouseEvent -> Mod st ()) -> Props st
 onMouseDown f = props "onMouseDown" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onMouseDownWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseDownWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onMouseDownWithOptions opts f = props "onMouseDown" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mousemove
-onMouseMove :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseMove :: (MouseEvent -> Mod st ()) -> Props st
 onMouseMove f = props "onMouseMove" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onMouseMoveWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseMoveWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onMouseMoveWithOptions opts f = props "onMouseMove" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseenter
-onMouseEnter :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseEnter :: (MouseEvent -> Mod st ()) -> Props st
 onMouseEnter f = props "onMouseEnter" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onMouseEnterWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseEnterWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onMouseEnterWithOptions opts f = props "onMouseEnter" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseleave
-onMouseLeave :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseLeave :: (MouseEvent -> Mod st ()) -> Props st
 onMouseLeave f = props "onMouseLeave" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onMouseLeaveWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseLeaveWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onMouseLeaveWithOptions opts f = props "onMouseLeave" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseover
-onMouseOver :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseOver :: (MouseEvent -> Mod st ()) -> Props st
 onMouseOver f = props "onMouseOver" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onMouseOverWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseOverWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onMouseOverWithOptions opts f = props "onMouseOver" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/mouseout
-onMouseOut :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseOut :: (MouseEvent -> Mod st ()) -> Props st
 onMouseOut f = props "onMouseOut" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onMouseOutWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onMouseOutWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onMouseOutWithOptions opts f = props "onMouseOut" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragstart
-onDragStart :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragStart :: (MouseEvent -> Mod st ()) -> Props st
 onDragStart f = props "onDragStart" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onDragStartWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragStartWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onDragStartWithOptions opts f = props "onDragStart" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragover
-onDragOver :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragOver :: (MouseEvent -> Mod st ()) -> Props st
 onDragOver f = props "onDragOver" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onDragOverWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragOverWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onDragOverWithOptions opts f = props "onDragOver" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragend
-onDragEnd :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragEnd :: (MouseEvent -> Mod st ()) -> Props st
 onDragEnd f = props "onDragEnd" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onDragEndWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragEndWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onDragEndWithOptions opts f = props "onDragEnd" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragenter
-onDragEnter :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragEnter :: (MouseEvent -> Mod st ()) -> Props st
 onDragEnter f = props "onDragEnter" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onDragEnterWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragEnterWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onDragEnterWithOptions opts f = props "onDragEnter" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/dragleave
-onDragLeave :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragLeave :: (MouseEvent -> Mod st ()) -> Props st
 onDragLeave f = props "onDragLeave" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onDragLeaveWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragLeaveWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onDragLeaveWithOptions opts f = props "onDragLeave" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/drag
-onDrag :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDrag :: (MouseEvent -> Mod st ()) -> Props st
 onDrag f = props "onDrag" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))
 
-onDragWithOptions :: EventOptions -> (MouseEvent -> ST.StateT st IO ()) -> Props st
+onDragWithOptions :: EventOptions -> (MouseEvent -> Mod st ()) -> Props st
 onDragWithOptions opts f = props "onDrag" (PropEvent opts (f . extractResult . A.fromJSON . getDOMEvent))
 
 --------------------------------------------------------------------------------
@@ -315,10 +315,10 @@ keyEvents ctx keyDown keyUp = do
 
 type StartTrackedDrag st = forall a.
      MouseEvent
-  -> (ST.StateT st IO a) -- ^ dragStarted
-  -> (a -> Bool -> Int -> Int -> ST.StateT st IO ()) -- ^ dragDragged
-  -> (ST.StateT st IO ()) -- ^ dragFinished
-  -> ST.StateT st IO ()
+  -> Mod st a -- ^ dragStarted
+  -> (a -> Bool -> Int -> Int -> Mod st ()) -- ^ dragDragged
+  -> Mod st () -- ^ dragFinished
+  -> Mod st ()
 
 -- TODO: pointer capture instead of windows
 startTrackedDrag
@@ -366,7 +366,7 @@ startTrackedDrag ctx modStCh mouseEvent dragStarted dragDragged dragFinished = d
         (x - mouseClientX mouseEvent)
         (y - mouseClientY mouseEvent)
 
-    writeState ds = atomically $ writeTChan modStCh $ ST.execStateT ds
+    writeState m = atomically $ writeTChan modStCh $ runModBlocking m
 
-onTrackedDragEnd :: (MouseEvent -> ST.StateT st IO ()) -> Props st
+onTrackedDragEnd :: (MouseEvent -> Mod st ()) -> Props st
 onTrackedDragEnd f = props "onTrackedDragEnd" (PropEvent defaultOptions (f . extractResult . A.fromJSON . getDOMEvent))

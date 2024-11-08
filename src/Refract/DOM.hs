@@ -3,6 +3,7 @@
 
 module Refract.DOM where
 
+import Control.Monad.Free
 import Control.Monad.Trans.Class (lift)
 import qualified Control.Monad.Trans.State as ST
 import qualified Control.Monad.Trans.Reader as R
@@ -12,10 +13,10 @@ import qualified Data.Aeson as A
 import qualified Data.Map as M
 import qualified Data.Text as T
 
-import Refract.DOM.Props (Props, Props'(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
+import Refract.DOM.Props (Props, runMod, ModF(ModF), Props'(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
 import qualified Replica.VDOM as VDOM
 
-type Ctx st = (st -> IO (), st)
+type Ctx st = (st -> IO (), IO (), st)
 
 newtype UI' st a = UI (R.ReaderT (Ctx st) (W.Writer VDOM.HTML) a)
   deriving (Functor, Applicative, Monad)
@@ -43,7 +44,7 @@ elWithNamespace ns name (Props props) = UI $ do
   where
     (UI ui, mprops) = W.runWriter props
 
-    toProps setState st (k, (PropEvent opts f)) = M.singleton k $ VDOM.AEvent opts $ \de -> ST.execStateT (f de) st >>= setState
+    toProps setState st (k, (PropEvent opts f)) = M.singleton k $ VDOM.AEvent opts $ \de -> runMod (f de) setState undefined st
     toProps setState st (k, (PropText v)) = M.singleton k $ VDOM.AText v
     toProps setState st (k, (PropBool v)) = M.singleton k $ VDOM.ABool v
     toProps setState st (k, (PropMap (Props m))) = M.singleton k $ VDOM.AMap $ M.unions $ map (toProps setState st) (W.execWriter m)

@@ -1,9 +1,13 @@
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Refract.DOM.Props where
 
-import qualified Control.Monad.Trans.State as ST
+import Control.Monad.Free
+import Control.Monad.IO.Class
 import qualified Control.Monad.Trans.Writer.CPS as W
 
 import qualified Data.Text                 as T
@@ -11,10 +15,47 @@ import qualified Data.Text                 as T
 import           Replica.VDOM              (DOMEvent)
 import           Replica.VDOM.Types        (DOMEvent(getDOMEvent), EventOptions(EventOptions))
 
+data ModF st n = forall a. ModF (st -> IO (st, a)) (a -> n)
+
+deriving instance Functor (ModF st)
+
+newtype Mod st a = Mod (Free (ModF st) a)
+  deriving (Functor, Applicative, Monad)
+
+instance MonadIO (Mod st) where
+  liftIO io = modify $ \st -> do
+    r <- io
+    pure (st, r)
+
+runMod :: Mod st a -> (st -> IO ()) -> IO () -> st -> IO ()
+runMod (Mod (Pure _)) _ done _ = done
+runMod (Mod (Free (ModF f n))) setState done st = do
+  (st', a) <- f st
+  setState st'
+  runMod (Mod $ n a) setState done st'
+
+runModBlocking :: Mod st a -> st -> IO st
+runModBlocking (Mod (Pure _)) st = pure st
+runModBlocking (Mod (Free (ModF f n))) st = do
+  (st', a) <- f st
+  runModBlocking (Mod $ n a) st'
+
+modify :: (st -> IO (st, a)) -> Mod st a
+modify f = Mod $ liftF $ ModF f (\a -> a)
+
+modify' :: (st -> IO st) -> Mod st ()
+modify' f = modify $ \st -> f st >>= \st' -> pure (st', ())
+
+get :: Mod st st
+get = modify $ \st -> pure (st, st)
+
+set :: st -> Mod st ()
+set st = modify $ \_ -> pure (st, ())
+
 data Prop st
   = PropText T.Text
   | PropBool Bool
-  | PropEvent EventOptions (DOMEvent -> ST.StateT st IO ())
+  | PropEvent EventOptions (DOMEvent -> Mod st ())
   | PropMap (Props st)
 
 newtype Props' st a = Props (W.Writer [(T.Text, Prop st)] a)
