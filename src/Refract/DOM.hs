@@ -51,6 +51,9 @@ elWithNamespace ns name (Props props) = UI $ do
 empty :: UI st
 empty = UI $ pure ()
 
+nest :: UI' st a -> Props' st (UI' st a)
+nest = pure
+
 text :: T.Text -> UI st
 text txt = UI $ lift $ W.tell [ VDOM.VText txt ]
 
