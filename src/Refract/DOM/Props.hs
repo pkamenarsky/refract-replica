@@ -1,8 +1,10 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Refract.DOM.Props where
 
 import qualified Control.Monad.Trans.State as ST
+import qualified Control.Monad.Trans.Writer.CPS as W
 
 import qualified Data.Text                 as T
 
@@ -13,21 +15,27 @@ data Prop st
   = PropText T.Text
   | PropBool Bool
   | PropEvent EventOptions (DOMEvent -> ST.StateT st IO ())
-  | PropMap [Props st]
+  | PropMap (Props st)
 
-data Props st = Props T.Text (Prop st)
+newtype Props' st a = Props (W.Writer [(T.Text, Prop st)] a)
+  deriving (Functor, Applicative, Monad)
+
+type Props st = Props' st ()
+
+props :: T.Text -> Prop st -> Props st
+props k v = Props $ W.tell [(k, v)]
 
 boolProp :: T.Text -> Bool -> Props st
-boolProp k v = Props k (PropBool v)
+boolProp k v = props k (PropBool v)
 
 textProp :: T.Text -> T.Text -> Props st
-textProp k v = Props k (PropText v)
+textProp k v = props k (PropText v)
 
 key :: T.Text -> Props st
 key v = textProp "key" v
 
 style :: [(T.Text, T.Text)] -> Props st
-style m = Props "style" (PropMap [ Props k (PropText v) | (k, v) <- m ])
+style m = props "style" (PropMap $ sequence_ [ props k (PropText v) | (k, v) <- m ])
 
 -- | Define multiple classes conditionally
 --

@@ -35,24 +35,6 @@ dependencies:
 library:
   source-dirs: src
 
-executables:
-  refract-replica-exe:
-    main:                Main.hs
-    source-dirs:         app
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - refract-replica
-    - aeson-optics
-    - bytestring
-    - foreign-store
-    - optics
-    - pretty-simple
-    - unordered-containers
-    - vector
-
 tests:
   refract-replica-test:
     main:                Spec.hs
