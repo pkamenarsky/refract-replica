@@ -19,6 +19,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 
 import qualified Data.Aeson as A
+import qualified Data.Aeson.KeyMap as K
 import qualified Data.Aeson.Types as A
 import qualified Data.Aeson.Optics as A
 import qualified Data.ByteString.Lazy as BL
@@ -327,7 +328,8 @@ inspector draggedInst lv lInst l = div
           then case value of
             Just (A.Object o) ->
               [ go (path <> "." <> k) k (lv % A.key k)
-              | (k, v) <- H.toList o
+              | (k', v) <- K.toList o
+              , let k = pack (show k')
               ]
             Just (A.Array o) ->
               [ go (path <> "[" <> pack (show k) <> "]") (pack $ show k) (lv % A.nth k)

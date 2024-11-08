@@ -9,6 +9,7 @@ module Types where
 
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Optics as A
+import qualified Data.Aeson.KeyMap as K
 import qualified Data.HashMap.Strict as H
 import qualified Data.HashSet as HS
 import qualified Data.Vector as V
@@ -110,7 +111,8 @@ defaultNodeState = NodeState "root" False $ NodeArray False
 jsonToNodeState :: Text -> A.Value -> NodeState -> NodeState
 jsonToNodeState nn (A.Object m) (NodeState _ mo (NodeArray o children)) = NodeState nn mo $ NodeArray o
   [ jsonToNodeState k v $ fromMaybe (NodeState k False (NodeArray False [])) (H.lookup k chm)
-  | (k, v) <- H.toList m
+  | (k', v) <- K.toList m
+  , let k = pack (show k')
   ]
   where
     chm = H.fromList [ (k, v) | v@(NodeState k _ _) <- children ]
