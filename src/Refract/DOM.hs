@@ -3,7 +3,9 @@
 
 module Refract.DOM where
 
+import Control.Monad.Trans.Class (lift)
 import qualified Control.Monad.Trans.State as ST
+import qualified Control.Monad.Trans.Reader as R
 import qualified Control.Monad.Trans.Writer.CPS as W
 
 import qualified Data.Aeson as A
@@ -13,54 +15,44 @@ import qualified Data.Text as T
 import Refract.DOM.Props (Props, Props'(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
 import qualified Replica.VDOM as VDOM
 
-newtype Ref = Ref [Int]
+type Ctx st = (st -> IO (), st)
 
-newtype Component st = Component { runComponent :: [Int] -> (st -> IO ()) -> st -> VDOM.HTML }
-
-newtype UI' st a = UI (W.Writer [Component st] a)
+newtype UI' st a = UI (R.ReaderT (Ctx st) (W.Writer VDOM.HTML) a)
   deriving (Functor, Applicative, Monad)
 
 type UI st = UI' st ()
-
-emptyUI :: UI st
-emptyUI = UI $ pure ()
-
-withRef :: (Ref -> Component st) -> Component st
-withRef f = Component $ \path setState st -> runComponent (f (Ref path)) path setState st
 
 el :: T.Text -> Props' st (UI st) -> UI st
 el = elWithNamespace Nothing
 
 el_ :: T.Text -> Props st -> UI st
-el_ t props = el t (props >> pure emptyUI)
+el_ t props = el t (props >> pure empty)
 
 elWithNamespace :: Maybe VDOM.Namespace -> T.Text -> Props' st (UI st) -> UI st
-elWithNamespace ns name (Props props) = UI $ W.tell
-  [ Component $ \path setState st ->
-      [ VDOM.VNode
-          name
-          (M.unions $ map (toProps setState st) mprops)
-          ns
-          $ mconcat
-              [ runComponent child (i:path) setState st
-              | (i, child) <- zip [0..] children
-              ]
-      ]
-  ]
+elWithNamespace ns name (Props props) = UI $ do
+  (setState, st) <- R.ask
+  children <- R.asks (W.execWriter . R.runReaderT ui)
+
+  lift $ W.tell
+    [ VDOM.VNode
+        name
+        (M.unions $ map (toProps setState st) mprops)
+        ns
+        children
+    ]
   where
     (UI ui, mprops) = W.runWriter props
-    children = W.execWriter ui
 
     toProps setState st (k, (PropEvent opts f)) = M.singleton k $ VDOM.AEvent opts $ \de -> ST.execStateT (f de) st >>= setState
     toProps setState st (k, (PropText v)) = M.singleton k $ VDOM.AText v
     toProps setState st (k, (PropBool v)) = M.singleton k $ VDOM.ABool v
     toProps setState st (k, (PropMap (Props m))) = M.singleton k $ VDOM.AMap $ M.unions $ map (toProps setState st) (W.execWriter m)
  
-empty :: Component st
-empty = Component $ \_ _ _ -> []
+empty :: UI st
+empty = UI $ pure ()
 
 text :: T.Text -> UI st
-text txt = UI $ W.tell [ Component $ \_ _ _ -> [VDOM.VText txt] ]
+text txt = undefined -- UI $ lift $ W.tell [ Component $ \_ _ _ -> [VDOM.VText txt] ]
 
 -- | https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div
 div :: Props' st (UI st) -> UI st
