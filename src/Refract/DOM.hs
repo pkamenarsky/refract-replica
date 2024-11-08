@@ -52,7 +52,7 @@ empty :: UI st
 empty = UI $ pure ()
 
 text :: T.Text -> UI st
-text txt = undefined -- UI $ lift $ W.tell [ Component $ \_ _ _ -> [VDOM.VText txt] ]
+text txt = UI $ lift $ W.tell [ VDOM.VText txt ]
 
 -- | https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div
 div :: Props' st (UI st) -> UI st
