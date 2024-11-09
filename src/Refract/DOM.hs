@@ -12,10 +12,8 @@ import qualified Data.Aeson as A
 import qualified Data.Map as M
 import qualified Data.Text as T
 
-import Refract.DOM.Props (Props, Props'(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
+import Refract.DOM.Props (Ctx, Mod(Mod), Props, Props'(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
 import qualified Replica.VDOM as VDOM
-
-type Ctx st = (st -> IO (), st)
 
 newtype UI' st a = UI (R.ReaderT (Ctx st) (W.Writer VDOM.HTML) a)
   deriving (Functor, Applicative, Monad)
@@ -31,6 +29,7 @@ el_ t props = el t (props >> pure empty)
 elWithNamespace :: Maybe VDOM.Namespace -> T.Text -> Props' st (UI st) -> UI st
 elWithNamespace ns name (Props props) = UI $ do
   (setState, st) <- R.ask
+
   children <- R.asks (W.execWriter . R.runReaderT ui)
 
   lift $ W.tell
@@ -43,7 +42,7 @@ elWithNamespace ns name (Props props) = UI $ do
   where
     (UI ui, mprops) = W.runWriter props
 
-    toProps setState st (k, (PropEvent opts f)) = M.singleton k $ VDOM.AEvent opts $ \de -> ST.execStateT (f de) st >>= setState
+    toProps setState st (k, (PropEvent opts f)) = M.singleton k $ VDOM.AEvent opts $ \de -> case f de of Mod f -> setState (ST.execStateT $ R.runReaderT f (setState, st))
     toProps setState st (k, (PropText v)) = M.singleton k $ VDOM.AText v
     toProps setState st (k, (PropBool v)) = M.singleton k $ VDOM.ABool v
     toProps setState st (k, (PropMap (Props m))) = M.singleton k $ VDOM.AMap $ M.unions $ map (toProps setState st) (W.execWriter m)

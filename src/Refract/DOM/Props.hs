@@ -3,6 +3,11 @@
 
 module Refract.DOM.Props where
 
+import Control.Monad (void)
+import Control.Concurrent (forkIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Class (lift)
+import qualified Control.Monad.Trans.Reader as R
 import qualified Control.Monad.Trans.State as ST
 import qualified Control.Monad.Trans.Writer.CPS as W
 
@@ -11,16 +16,48 @@ import qualified Data.Text                 as T
 import           Replica.VDOM              (DOMEvent)
 import           Replica.VDOM.Types        (DOMEvent(getDOMEvent), EventOptions(EventOptions))
 
+type Ctx st = ((st -> IO st) -> IO (), st)
+
+newtype Mod st a = Mod (R.ReaderT (Ctx st) (ST.StateT st IO) a)
+  deriving (Functor, Applicative, Monad)
+
+modify :: (st -> IO (a, st)) -> Mod st a
+modify f = Mod $ lift $ ST.StateT f
+
+modify' :: (st -> IO st) -> Mod st ()
+modify' f = modify $ \st -> f st >>= \st' -> pure ((), st')
+
+get :: Mod st st
+get = modify $ \st -> pure (st, st)
+
+set :: st -> Mod st ()
+set st = modify $ \_ -> pure ((), st)
+
+nonBlockingIO :: IO a -> Mod st a
+nonBlockingIO io = Mod $ liftIO io
+
+blockingIO :: IO (Mod st ()) -> Mod st ()
+blockingIO io = Mod $ do
+  env@(setState, st) <- R.ask
+
+  liftIO $ void $ forkIO $ do
+    Mod f <- io
+    setState $ ST.execStateT (R.runReaderT f env)
+
 data Prop st
   = PropText T.Text
   | PropBool Bool
-  | PropEvent EventOptions (DOMEvent -> ST.StateT st IO ())
+  | PropEvent EventOptions (DOMEvent -> Mod st ())
   | PropMap (Props st)
 
 newtype Props' st a = Props (W.Writer [(T.Text, Prop st)] a)
   deriving (Functor, Applicative, Monad)
 
 type Props st = Props' st ()
+
+-- blockingIO :: IO (ST.StateT st IO ()) -> Props st
+-- blockingIO io = liftIO $ void $ forkIO $
+--   undefined
 
 props :: T.Text -> Prop st -> Props st
 props k v = Props $ W.tell [(k, v)]

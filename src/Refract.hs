@@ -31,11 +31,6 @@ state f = UI $ do
   UI ui <- R.asks $ \(_, st) -> f st
   ui
 
-state' :: (st -> (st -> IO ()) -> UI st) -> UI st
-state' f = UI $ do
-  UI ui <- R.asks $ \(setState, st) -> f st setState
-  ui
-
 --------------------------------------------------------------------------------
 
 run
@@ -77,7 +72,7 @@ step
   -> (R.Context -> [TChan (st -> IO st)] -> UI st)
   -> R.Context
   -> st
-  -> (TChan st, [TChan (st -> IO st)])
+  -> (TChan (st -> IO st), [TChan (st -> IO st)])
   -> IO (V.HTML, R.Event -> Maybe (IO ()), IO (Maybe st))
 step setState f ctx st (cmpStCh, exModStChs) = do
   let UI ui = f ctx exModStChs
@@ -90,7 +85,7 @@ step setState f ctx st (cmpStCh, exModStChs) = do
   where
     readSt = do
       f <- atomically $ asum
-        [ fmap pure . const <$> readTChan cmpStCh
+        [ readTChan cmpStCh
         , asum $ map readTChan exModStChs
         ]
       st' <- f st
